@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\Matvey Sazhnov\\\\Desktop\\\\hackathon\\\\frontend\\\\src\\\\styles\")"
+    ]
+  }
+}

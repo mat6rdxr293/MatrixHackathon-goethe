@@ -1,0 +1,28 @@
+:root {
+  font-family:
+    "Manrope",
+    "Trebuchet MS",
+    "Segoe UI",
+    sans-serif;
+  line-height: 1.45;
+  font-weight: 500;
+  color: #163542;
+  background-color: #f7fbfb;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f7fbfb;
+}
+
+#root {
+  min-height: 100svh;
+}
