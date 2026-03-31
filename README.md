@@ -1,101 +1,164 @@
 # Aqbobek Lyceum Portal (MVP)
 
-Unified school portal MVP with:
-- role-based cabinets (`student`, `teacher`, `parent`, `admin`)
-- academic dashboard and progress dynamics
-- achievements and leaderboard
-- events/news
-- AI Mentor summaries/recommendations
-- predictive risk analytics + class AI report generation
-- admin analytics/users/content management
-- smart schedule generation + automatic teacher absence replanning
-- targeted notifications feed for roles/classes
-- fullscreen kiosk mode
-- BilimClass integration adapter with database fallback
-- polished jury-ready UI (cards/tables/filters/actions, no raw JSON blocks)
-- built-in i18n interface switch: Russian (`RU`) and Kazakh (`KZ`)
+Современный единый школьный портал для **Aqbobek Lyceum**, который объединяет учебный процесс, аналитику, достижения, события и AI-инструменты в одной системе.
 
-## Stack
-- Frontend: `React + TypeScript + Vite`
-- UI/UX: `lucide-react` icons, `recharts` charts, `framer-motion` page transitions
-- Backend: `Node.js + Express + TypeScript`
+---
 
-## Quick Start
-### Option A: Windows .bat scripts
-1. Run setup:
+## О проекте
+
+**Aqbobek Lyceum Portal** — это MVP единой цифровой школьной платформы с поддержкой нескольких ролей:
+
+- **ученик**
+- **учитель**
+- **родитель**
+- **администратор**
+
+Система помогает школе уйти от разрозненных сервисов и собрать всё в одном интерфейсе: успеваемость, расписание, достижения, уведомления, аналитику, AI-рекомендации и управление контентом.
+
+Проект подготовлен как **показательный MVP** с упором на:
+- понятный и современный интерфейс
+- демонстрацию реальной пользы для школы
+- готовность к презентации жюри / хакатону
+- дальнейшее масштабирование
+
+---
+
+## Основные возможности
+
+### Пользовательские кабинеты по ролям
+Портал поддерживает **role-based access** для следующих ролей:
+
+- **Student** — личный кабинет ученика
+- **Teacher** — кабинет учителя
+- **Parent** — кабинет родителя
+- **Admin** — административная панель
+
+Для каждой роли доступен свой набор данных, действий и интерфейсов.
+
+---
+
+### Учебная аналитика и прогресс
+- академический дашборд
+- отслеживание динамики успеваемости
+- визуализация прогресса
+- просмотр ключевых учебных показателей
+- подготовка AI-сводок и рекомендаций
+
+---
+
+### Достижения и лидерборд
+- система достижений
+- отображение сильных сторон учеников
+- мотивационный рейтинг / leaderboard
+- удобное представление достижений без перегрузки интерфейса
+
+---
+
+### События и новости
+- школьные события
+- объявления
+- новостная лента
+- единое пространство для информирования разных ролей
+
+---
+
+### AI Mentor
+AI-блок в системе может использоваться для:
+- кратких учебных сводок
+- персонализированных рекомендаций
+- подсказок по успеваемости
+- генерации аналитических выводов для учеников, родителей и учителей
+
+---
+
+### Предиктивная аналитика и AI-отчёты
+- прогнозирование рисков по успеваемости
+- выявление потенциальных проблем
+- AI-отчёт по классу для учителя
+- поддержка принятия решений администрацией и педагогами
+
+---
+
+### Административная панель
+Для администратора доступны:
+- аналитика по системе
+- управление пользователями
+- управление контентом
+- управление школьными данными
+- просмотр общей картины по порталу
+
+---
+
+### Умное расписание
+Система включает модуль работы с расписанием:
+
+- генерация расписания
+- автоматическое перепланирование при отсутствии учителя
+- поддержка более гибкой логики составления учебного дня
+
+---
+
+### Уведомления
+- таргетированные уведомления по ролям
+- уведомления по классам
+- лента уведомлений
+- единая система информирования пользователей
+
+---
+
+### Kiosk Mode
+Режим **fullscreen kiosk** позволяет использовать портал как:
+- школьный экран
+- информационную панель
+- стенгазету / digital display
+- презентационный режим для общих пространств школы
+
+---
+
+### Интеграция с BilimClass
+Портал поддерживает адаптер интеграции с **BilimClass**.
+
+Особенности:
+- режим **live-first**
+- получение данных из BilimClass при доступности интеграции
+- fallback на локальную базу данных при недоступности внешнего источника
+- более надёжная работа MVP даже при нестабильном API
+
+---
+
+### Интерфейс и локализация
+- современный UI для демонстрации жюри
+- карточки, таблицы, фильтры, действия
+- **без сырых JSON-блоков**
+- встроенное переключение языка интерфейса:
+  - **RU** — русский
+  - **KZ** — казахский
+
+---
+
+## Технологический стек
+
+### Frontend
+- **React**
+- **TypeScript**
+- **Vite**
+
+### UI / UX
+- **lucide-react** — иконки
+- **recharts** — графики и аналитика
+- **framer-motion** — анимации и переходы между страницами
+
+### Backend
+- **Node.js**
+- **Express**
+- **TypeScript**
+
+---
+
+## Быстрый запуск
+
+## Вариант A — запуск через `.bat`-скрипты (Windows)
+
+### 1. Установка проекта
 ```bat
 setup_project.bat
-```
-
-2. Start both services:
-```bat
-start_dev.bat
-```
-
-3. Production-like run (frontend + backend HTTPS):
-```bat
-start_prod.bat
-```
-By default, the script looks for TLS files:
-- `frontend/.cert/localhost.pem` + `frontend/.cert/localhost-key.pem`
-- or `frontend/.cert/cert.pem` + `frontend/.cert/key.pem`
-- or `frontend/.cert/fullchain.pem` + `frontend/.cert/privkey.pem`
-- or legacy `frontend/.cert/localhost.crt` + `frontend/.cert/localhost.key`
-
-If they are missing, it auto-generates a local `.pfx` certificate and uses it for both services.
-
-### Option B: Manual commands
-1. Install dependencies
-```bash
-cd backend && npm install
-cd ../frontend && npm install
-```
-
-2. Configure backend env
-```bash
-cd backend
-copy .env.example .env
-```
-
-3. Run backend
-```bash
-cd backend
-npm run dev
-```
-
-4. Run frontend
-```bash
-cd frontend
-npm run dev
-```
-
-Frontend opens at `http://localhost:5173`, backend at `http://localhost:4000`.
-
-## Accounts
-- Предустановленные аккаунты отключены.
-- Пользователи, классы, достижения и профили успеваемости читаются из базы данных.
-
-## API Highlights
-- Auth: `POST /api/auth/login`, `GET /api/auth/me`
-- Portal: `GET /api/dashboard`, `GET /api/progress`, `GET /api/achievements`, `GET /api/events`, `GET /api/ai-mentor`
-- AI chat assistant: `POST /api/ai-chat` (`message`, optional `history`)
-- Predictions: `GET /api/predictions`
-- Teacher AI report: `GET /api/teacher/class-report?classId=10A`
-- Schedule: `GET /api/schedule`
-- Notifications: `GET /api/notifications`
-- Kiosk: `GET /api/kiosk`
-- Admin: `GET /api/admin/analytics`, `GET /api/admin/users`, `GET /api/admin/content`, `POST /api/admin/content`
-- Admin schedule: `GET /api/admin/schedule`, `POST /api/admin/schedule/generate`, `POST /api/admin/schedule/teacher-absence`
-- BilimClass integration points:
-  - `GET /api/integrations/bilimclass/status`
-  - `GET /api/integrations/bilimclass/students`
-
-## BilimClass Integration Mode
-Integration now works in `live-first` mode.
-
-In `backend/.env`:
-- `USE_REAL_BILIMCLASS=true` enables live requests to BilimClass
-- `BILIMCLASS_BASE_URL` and `BILIMCLASS_TOKEN` are required for real sync
-- `BILIMCLASS_STUDENT_PROFILES_PATHS` lets you set one or multiple API paths
-- `BILIMCLASS_TIMEOUT_MS` controls request timeout
-- If BilimClass is temporarily unavailable, the backend reads already synced profiles from the database
