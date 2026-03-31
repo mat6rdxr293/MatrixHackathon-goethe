@@ -1,24 +1,44 @@
-﻿import { CalendarClock } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../hooks/useI18n";
 import { useApiData } from "../hooks/useApiData";
-import type { ScheduleResponse } from "../types/portal";
+import type { Lang, ScheduleResponse } from "../types/portal";
 import { DataState } from "../components/ui/DataState";
 import { PageTransition } from "../components/ui/PageTransition";
 import { Section } from "../components/ui/Section";
 
-const dayLabels = ["-", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const getLocaleTag = (lang: Lang) => (lang === "kk" ? "kk-KZ" : "ru-RU");
+
+const getDayLabel = (day: number, lang: Lang) => {
+  if (day < 1 || day > 7) {
+    return String(day);
+  }
+  const date = new Date(Date.UTC(2024, 0, day));
+  const raw = new Intl.DateTimeFormat(getLocaleTag(lang), { weekday: "short" }).format(date).replace(".", "");
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+};
 
 export function SchedulePage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { data, loading, error, refresh } = useApiData<ScheduleResponse>("/api/schedule");
 
   const [dayFilter, setDayFilter] = useState<number | "all">("all");
 
   const items = useMemo(() => {
     const source = data?.items ?? [];
-    return source.filter((item) => (dayFilter === "all" ? true : item.day === dayFilter));
+    const filtered = source.filter((item) => (dayFilter === "all" ? true : item.day === dayFilter));
+    return [...filtered].sort((a, b) => a.day - b.day || a.slot - b.slot || a.classId.localeCompare(b.classId));
   }, [data?.items, dayFilter]);
+
+  const groupedByDay = useMemo(() => {
+    const byDay = new Map<number, typeof items>();
+    for (const item of items) {
+      const list = byDay.get(item.day) ?? [];
+      list.push(item);
+      byDay.set(item.day, list);
+    }
+    return [...byDay.entries()].sort((a, b) => a[0] - b[0]);
+  }, [items]);
 
   const byStatus = useMemo(
     () => ({
@@ -53,7 +73,7 @@ export function SchedulePage() {
                       className={dayFilter === day ? "chip-button active" : "chip-button"}
                       onClick={() => setDayFilter(day)}
                     >
-                      {dayLabels[day]}
+                      {getDayLabel(day, lang)}
                     </button>
                   ))}
                 </div>
@@ -74,39 +94,39 @@ export function SchedulePage() {
 
             <Section title={t("k_205")}> 
               {items.length > 0 ? (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>{t("k_148")}</th>
-                      <th>{t("k_208")}</th>
-                      <th>{t("k_083")}</th>
-                      <th>{t("k_090")}</th>
-                      <th>{t("k_182")}</th>
-                      <th>{t("k_209")}</th>
-                      <th>{t("k_103")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item) => (
-                      <tr key={item.id}>
-                        <td>{dayLabels[item.day] ?? item.day}</td>
-                        <td>{item.slot}</td>
-                        <td>{item.classId}</td>
-                        <td>
-                          {item.subject}
-                          {item.groupName ? <span className="muted-inline"> ({item.groupName})</span> : null}
-                        </td>
-                        <td>{item.teacherId}</td>
-                        <td>{item.room}</td>
-                        <td>
-                          {item.status === "planned" ? <span className="chip good">{t("k_237")}</span> : null}
-                          {item.status === "changed" ? <span className="chip warn">{t("k_206")}</span> : null}
-                          {item.status === "cancelled" ? <span className="chip bad">{t("k_207")}</span> : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="schedule-day-grid">
+                  {groupedByDay.map(([day, dayItems]) => (
+                    <article key={day} className="schedule-day-card">
+                      <header>
+                        <h4>{getDayLabel(day, lang)}</h4>
+                        <span className="chip">{dayItems.length}</span>
+                      </header>
+                      <div className="schedule-lesson-list">
+                        {dayItems.map((item) => (
+                          <div key={item.id} className="schedule-lesson-row">
+                            <span className="schedule-slot">#{item.slot}</span>
+                            <div className="schedule-lesson-main">
+                              <strong>
+                                {item.subject}
+                                {item.groupName ? <span className="muted-inline"> ({item.groupName})</span> : null}
+                              </strong>
+                              <div className="schedule-lesson-meta">
+                                <span>{t("k_182")}: {item.teacherId}</span>
+                                <span>{t("k_209")}: {item.room}</span>
+                                <span>{t("k_083")}: {item.classId}</span>
+                              </div>
+                            </div>
+                            <div>
+                              {item.status === "planned" ? <span className="chip good">{t("k_237")}</span> : null}
+                              {item.status === "changed" ? <span className="chip warn">{t("k_206")}</span> : null}
+                              {item.status === "cancelled" ? <span className="chip bad">{t("k_207")}</span> : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
               ) : (
                 <div className="empty-state-inline">
                   <CalendarClock size={18} />
@@ -120,4 +140,3 @@ export function SchedulePage() {
     </PageTransition>
   );
 }
-

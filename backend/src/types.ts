@@ -40,6 +40,22 @@ export type Achievement = {
   badge: string;
   date: string;
   points: number;
+  proofUrl?: string;
+  proofNote?: string;
+  proofAttachment?: {
+    fileName: string;
+    mimeType: string;
+    dataUrl: string;
+  };
+  submittedBy?: string;
+  submittedAt?: string;
+  verification?: {
+    status: "verified" | "pending";
+    verifiedAt?: string;
+    verifiedBy?: string;
+    method?: string;
+    evidence?: string;
+  };
 };
 
 export type EventItem = {

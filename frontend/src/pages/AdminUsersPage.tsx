@@ -1,4 +1,5 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import { roleLabelKey } from "../config/labels";
 import { useI18n } from "../hooks/useI18n";
 import { useApiData } from "../hooks/useApiData";
@@ -32,6 +33,8 @@ const initialUserForm: UserFormState = {
   linkedStudentId: "",
 };
 
+type UsersModalMode = "class" | "account" | null;
+
 export function AdminUsersPage() {
   const { t } = useI18n();
   const usersState = useApiData<AdminUsersResponse>("/api/admin/users");
@@ -44,11 +47,13 @@ export function AdminUsersPage() {
   const [classError, setClassError] = useState<string | null>(null);
   const [classSuccess, setClassSuccess] = useState<string | null>(null);
   const [classSaving, setClassSaving] = useState(false);
+  const [modalMode, setModalMode] = useState<UsersModalMode>(null);
 
   const [userForm, setUserForm] = useState<UserFormState>(initialUserForm);
   const [userSaving, setUserSaving] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
   const [userSuccess, setUserSuccess] = useState<string | null>(null);
+  const [pageSuccess, setPageSuccess] = useState<string | null>(null);
 
   const users = useMemo(() => usersState.data?.users ?? [], [usersState.data]);
   const classes = useMemo(() => classesState.data?.items ?? [], [classesState.data]);
@@ -79,8 +84,11 @@ export function AdminUsersPage() {
       });
       setClassId("");
       setClassTeacherId("");
-      setClassSuccess(t("k_184"));
-      await refreshAll();
+      const successMessage = t("k_184");
+      setClassSuccess(successMessage);
+      setPageSuccess(successMessage);
+      setModalMode(null);
+      await refreshAll().catch(() => undefined);
     } catch (err) {
       setClassError(getErrorMessage(err));
     } finally {
@@ -109,13 +117,48 @@ export function AdminUsersPage() {
         ...initialUserForm,
         role: prev.role,
       }));
-      setUserSuccess(t("k_191"));
-      await refreshAll();
+      const successMessage = t("k_191");
+      setUserSuccess(successMessage);
+      setPageSuccess(successMessage);
+      setModalMode(null);
+      await refreshAll().catch(() => undefined);
     } catch (err) {
       setUserError(getErrorMessage(err));
     } finally {
       setUserSaving(false);
     }
+  };
+
+  useEffect(() => {
+    if (!modalMode) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setModalMode(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalMode]);
+
+  useEffect(() => {
+    if (!pageSuccess) {
+      return;
+    }
+    const timerId = window.setTimeout(() => setPageSuccess(null), 3200);
+    return () => window.clearTimeout(timerId);
+  }, [pageSuccess]);
+
+  const openModal = (mode: Exclude<UsersModalMode, null>) => {
+    if (mode === "class") {
+      setClassError(null);
+      setClassSuccess(null);
+    } else {
+      setUserError(null);
+      setUserSuccess(null);
+    }
+    setModalMode(mode);
   };
 
   return (
@@ -125,143 +168,24 @@ export function AdminUsersPage() {
 
         {!loading && !error ? (
           <>
-            <div className="dual-grid">
-              <Section title={t("k_180")}>
-                <form className="admin-form" onSubmit={submitClass}>
-                  <label>
-                    {t("k_181")}
-                    <input
-                      value={classId}
-                      onChange={(event) => setClassId(event.target.value.toUpperCase())}
-                      required
-                    />
-                  </label>
-                  <label>
-                    {t("k_182")}
-                    <select
-                      value={classTeacherId}
-                      onChange={(event) => setClassTeacherId(event.target.value)}
-                    >
-                      <option value="">{t("k_193")}</option>
-                      {teachers.map((teacher) => (
-                        <option key={teacher.id} value={teacher.id}>
-                          {teacher.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {classError ? <p className="form-error">{classError}</p> : null}
-                  {classSuccess ? <p className="success-text">{classSuccess}</p> : null}
-                  <button className="solid-button" type="submit" disabled={classSaving}>
-                    {classSaving ? t("k_151") : t("k_183")}
-                  </button>
-                </form>
-              </Section>
+            <section className="users-actions-card">
+              <div className="users-actions-copy">
+                <h3>{t("k_145")}</h3>
+                <p>
+                  {t("k_183")} / {t("k_190")}
+                </p>
+              </div>
+              <div className="action-row">
+                <button className="solid-button" type="button" onClick={() => openModal("account")}>
+                  {t("k_190")}
+                </button>
+                <button className="outline-button" type="button" onClick={() => openModal("class")}>
+                  {t("k_183")}
+                </button>
+              </div>
+            </section>
 
-              <Section title={t("k_187")}>
-                <form className="admin-form" onSubmit={submitUser}>
-                  <label>
-                    {t("k_127")}
-                    <select
-                      value={userForm.role}
-                      onChange={(event) =>
-                        setUserForm((prev) => ({
-                          ...prev,
-                          role: event.target.value as Role,
-                          classId: "",
-                          linkedStudentId: "",
-                        }))
-                      }
-                    >
-                      {(["student", "teacher", "parent", "admin"] as Role[]).map((role) => (
-                        <option key={role} value={role}>
-                          {t(roleLabelKey(role))}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t("k_126")}
-                    <input
-                      value={userForm.name}
-                      onChange={(event) =>
-                        setUserForm((prev) => ({ ...prev, name: event.target.value }))
-                      }
-                      required
-                    />
-                  </label>
-                  <label>
-                    {t("k_067")}
-                    <input
-                      type="email"
-                      value={userForm.email}
-                      onChange={(event) =>
-                        setUserForm((prev) => ({ ...prev, email: event.target.value }))
-                      }
-                      required
-                    />
-                  </label>
-                  <label>
-                    {t("k_188")}
-                    <input
-                      type="password"
-                      value={userForm.password}
-                      onChange={(event) =>
-                        setUserForm((prev) => ({ ...prev, password: event.target.value }))
-                      }
-                      minLength={6}
-                      required
-                    />
-                  </label>
-                  {userForm.role === "student" || userForm.role === "teacher" ? (
-                    <label>
-                      {t("k_083")}
-                      <select
-                        value={userForm.classId}
-                        onChange={(event) =>
-                          setUserForm((prev) => ({ ...prev, classId: event.target.value }))
-                        }
-                        required={userForm.role === "student"}
-                      >
-                        <option value="">{t("k_193")}</option>
-                        {classes.map((item) => (
-                          <option key={item.classId} value={item.classId}>
-                            {item.classId}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  {userForm.role === "student" || userForm.role === "parent" ? (
-                    <label>
-                      {t("k_189")}
-                      <select
-                        value={userForm.linkedStudentId}
-                        onChange={(event) =>
-                          setUserForm((prev) => ({
-                            ...prev,
-                            linkedStudentId: event.target.value,
-                          }))
-                        }
-                        required={userForm.role === "parent"}
-                      >
-                        <option value="">{t("k_193")}</option>
-                        {studentProfiles.map((student) => (
-                          <option key={student.studentId} value={student.studentId}>
-                            {student.fullName} ({student.classId})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  {userError ? <p className="form-error">{userError}</p> : null}
-                  {userSuccess ? <p className="success-text">{userSuccess}</p> : null}
-                  <button className="solid-button" type="submit" disabled={userSaving}>
-                    {userSaving ? t("k_151") : t("k_190")}
-                  </button>
-                </form>
-              </Section>
-            </div>
+            {pageSuccess ? <p className="users-success-banner">{pageSuccess}</p> : null}
 
             <div className="stats-grid stats-grid-four">
               <StatCard title={t("k_140")} value={countByRole("student")} />
@@ -346,6 +270,156 @@ export function AdminUsersPage() {
                 </tbody>
               </table>
             </Section>
+
+            <button
+              className={modalMode ? "users-modal-backdrop show" : "users-modal-backdrop"}
+              type="button"
+              aria-hidden={modalMode ? "false" : "true"}
+              tabIndex={-1}
+              onClick={() => setModalMode(null)}
+            />
+
+            <aside className={modalMode ? "users-modal open" : "users-modal"} aria-hidden={!modalMode}>
+              <header className="users-modal-head">
+                <div>
+                  <h3>{modalMode === "class" ? t("k_180") : t("k_187")}</h3>
+                </div>
+                <button className="icon-btn users-modal-close" type="button" onClick={() => setModalMode(null)}>
+                  <X size={18} />
+                </button>
+              </header>
+
+              <div className="users-modal-tabs">
+                <button
+                  className={modalMode === "account" ? "chip-button active" : "chip-button"}
+                  type="button"
+                  onClick={() => setModalMode("account")}
+                >
+                  {t("k_190")}
+                </button>
+                <button
+                  className={modalMode === "class" ? "chip-button active" : "chip-button"}
+                  type="button"
+                  onClick={() => setModalMode("class")}
+                >
+                  {t("k_183")}
+                </button>
+              </div>
+
+              {modalMode === "class" ? (
+                <form className="admin-form" onSubmit={submitClass}>
+                  <label>
+                    {t("k_181")}
+                    <input value={classId} onChange={(event) => setClassId(event.target.value.toUpperCase())} required />
+                  </label>
+                  <label>
+                    {t("k_182")}
+                    <select value={classTeacherId} onChange={(event) => setClassTeacherId(event.target.value)}>
+                      <option value="">{t("k_193")}</option>
+                      {teachers.map((teacher) => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {classError ? <p className="form-error">{classError}</p> : null}
+                  {classSuccess ? <p className="success-text">{classSuccess}</p> : null}
+                  <button className="solid-button" type="submit" disabled={classSaving}>
+                    {classSaving ? t("k_151") : t("k_183")}
+                  </button>
+                </form>
+              ) : (
+                <form className="admin-form" onSubmit={submitUser}>
+                  <label>
+                    {t("k_127")}
+                    <select
+                      value={userForm.role}
+                      onChange={(event) =>
+                        setUserForm((prev) => ({
+                          ...prev,
+                          role: event.target.value as Role,
+                          classId: "",
+                          linkedStudentId: "",
+                        }))
+                      }
+                    >
+                      {(["student", "teacher", "parent", "admin"] as Role[]).map((role) => (
+                        <option key={role} value={role}>
+                          {t(roleLabelKey(role))}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {t("k_126")}
+                    <input
+                      value={userForm.name}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, name: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    {t("k_067")}
+                    <input
+                      type="email"
+                      value={userForm.email}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, email: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    {t("k_188")}
+                    <input
+                      type="password"
+                      value={userForm.password}
+                      onChange={(event) => setUserForm((prev) => ({ ...prev, password: event.target.value }))}
+                      minLength={6}
+                      required
+                    />
+                  </label>
+                  {userForm.role === "student" || userForm.role === "teacher" ? (
+                    <label>
+                      {t("k_083")}
+                      <select
+                        value={userForm.classId}
+                        onChange={(event) => setUserForm((prev) => ({ ...prev, classId: event.target.value }))}
+                        required={userForm.role === "student"}
+                      >
+                        <option value="">{t("k_193")}</option>
+                        {classes.map((item) => (
+                          <option key={item.classId} value={item.classId}>
+                            {item.classId}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {userForm.role === "student" || userForm.role === "parent" ? (
+                    <label>
+                      {t("k_189")}
+                      <select
+                        value={userForm.linkedStudentId}
+                        onChange={(event) => setUserForm((prev) => ({ ...prev, linkedStudentId: event.target.value }))}
+                        required={userForm.role === "parent"}
+                      >
+                        <option value="">{t("k_193")}</option>
+                        {studentProfiles.map((student) => (
+                          <option key={student.studentId} value={student.studentId}>
+                            {student.fullName} ({student.classId})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {userError ? <p className="form-error">{userError}</p> : null}
+                  {userSuccess ? <p className="success-text">{userSuccess}</p> : null}
+                  <button className="solid-button" type="submit" disabled={userSaving}>
+                    {userSaving ? t("k_151") : t("k_190")}
+                  </button>
+                </form>
+              )}
+            </aside>
           </>
         ) : null}
       </div>

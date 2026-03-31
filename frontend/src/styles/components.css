@@ -423,6 +423,25 @@ select:focus {
   gap: 0.5rem;
 }
 
+.admin-form label.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text2);
+  font-weight: 650;
+}
+
+.admin-form label.checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border2);
+  accent-color: var(--primary);
+  flex: 0 0 auto;
+}
+
 .chat-shell {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -482,6 +501,127 @@ select:focus {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.55rem;
+}
+
+.dashboard-focus-border {
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 0.55rem;
+  background: color-mix(in srgb, var(--surface) 92%, #dbeafe 8%);
+}
+
+.dashboard-focus-title {
+  margin: 0 0 0.35rem;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.achievement-submit-form {
+  grid-template-columns: repeat(2, minmax(170px, 1fr));
+  align-items: end;
+}
+
+.achievement-submit-form label:last-of-type {
+  grid-column: 1 / -1;
+}
+
+.achievement-submit-form button {
+  grid-column: 1 / -1;
+}
+
+.mini-proof {
+  margin-top: 0.45rem;
+  display: grid;
+  gap: 0.24rem;
+}
+
+.mini-proof a {
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.mini-proof span {
+  color: var(--text3);
+  font-size: 12px;
+}
+
+.schedule-day-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(250px, 1fr));
+  gap: 0.7rem;
+}
+
+.schedule-day-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 0.65rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.schedule-day-card > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.schedule-day-card h4 {
+  margin: 0;
+  color: var(--text1);
+  font-size: 14px;
+}
+
+.schedule-lesson-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.schedule-lesson-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.55rem;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem;
+  background: var(--surface2);
+}
+
+.schedule-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--primary-pale);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.schedule-lesson-main {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.schedule-lesson-main strong {
+  color: var(--text1);
+  font-size: 13px;
+}
+
+.schedule-lesson-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--text3);
+  font-size: 12px;
 }
 
 /* ─── Leaderboard & Podium ──────────────────────── */
@@ -607,4 +747,14 @@ select:focus {
 
 .leaderboard-row-3 td {
   background: linear-gradient(90deg, rgba(255, 237, 213, 0.5), transparent 70%);
+}
+
+@media (max-width: 900px) {
+  .schedule-day-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .achievement-submit-form {
+    grid-template-columns: 1fr;
+  }
 }

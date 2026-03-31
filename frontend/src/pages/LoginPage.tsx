@@ -13,8 +13,10 @@ import { useI18n } from "../hooks/useI18n";
 import { getErrorMessage } from "../lib/api";
 import { LanguageSwitch } from "../components/ui/LanguageSwitch";
 import { PageTransition } from "../components/ui/PageTransition";
+import type { Role } from "../types/portal";
 
 type RolePreview = {
+  value: Role;
   label: string;
   icon: LucideIcon;
 };
@@ -26,26 +28,31 @@ export function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const rolePreview = useMemo<RolePreview[]>(
     () => [
-      { label: t("k_001"), icon: GraduationCap },
-      { label: t("k_002"), icon: UserRound },
-      { label: t("k_003"), icon: UsersRound },
-      { label: t("k_004"), icon: ShieldCheck },
+      { value: "student", label: t("k_001"), icon: GraduationCap },
+      { value: "teacher", label: t("k_002"), icon: UserRound },
+      { value: "parent", label: t("k_003"), icon: UsersRound },
+      { value: "admin", label: t("k_004"), icon: ShieldCheck },
     ],
     [t],
   );
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setLoading(true);
     setError(null);
+    if (!selectedRole) {
+      setError(t("k_066"));
+      return;
+    }
+    setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, selectedRole);
       navigate("/app/dashboard");
     } catch (err) {
       setError(getErrorMessage(err));
@@ -76,39 +83,51 @@ export function LoginPage() {
 
           <p className="login-description">{t("k_066")}</p>
 
-          <div className="role-preview-grid" aria-hidden="true">
+          <div className="role-preview-grid" role="radiogroup" aria-label={t("k_046")}>
             {rolePreview.map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="role-preview-card">
+                <button
+                  key={item.value}
+                  type="button"
+                  className={selectedRole === item.value ? "role-preview-card selected" : "role-preview-card"}
+                  onClick={() => {
+                    setSelectedRole(item.value);
+                    setError(null);
+                  }}
+                  role="radio"
+                  aria-checked={selectedRole === item.value}
+                >
                   <span className="role-preview-icon">
                     <Icon size={16} />
                   </span>
                   <span>{item.label}</span>
-                </div>
+                </button>
               );
             })}
           </div>
 
-          <form className="login-form" onSubmit={submit}>
-            <label>
-              {t("k_067")}
-              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-            </label>
-            <label>
-              {t("k_068")}
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-            </label>
-            {error ? <p className="form-error">{error}</p> : null}
-            <button className="solid-button" type="submit" disabled={loading}>
-              {loading ? t("k_069") : t("k_070")}
-            </button>
-          </form>
+          {selectedRole ? (
+            <form className="login-form" onSubmit={submit}>
+              <label>
+                {t("k_067")}
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              </label>
+              <label>
+                {t("k_068")}
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
+              </label>
+              {error ? <p className="form-error">{error}</p> : null}
+              <button className="solid-button" type="submit" disabled={loading}>
+                {loading ? t("k_069") : t("k_070")}
+              </button>
+            </form>
+          ) : null}
         </div>
       </div>
     </PageTransition>

@@ -1,5 +1,5 @@
 ﻿import { Bell, CalendarClock, Megaphone } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type LocaleKey } from "../contexts/localeTypes";
 import { useI18n } from "../hooks/useI18n";
 import { useApiData } from "../hooks/useApiData";
@@ -30,6 +30,42 @@ export function NotificationsPage() {
   const { t, lang } = useI18n();
   const { data, loading, error, refresh } = useApiData<NotificationsResponse>("/api/notifications");
   const [filter, setFilter] = useState<NotificationFilter>("all");
+  const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+  const [newSinceSync, setNewSinceSync] = useState(0);
+  const latestSeenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void refresh().then(() => setLastSyncAt(new Date()));
+    }, 8000);
+
+    return () => window.clearInterval(intervalId);
+  }, [refresh]);
+
+  useEffect(() => {
+    const source = data?.items ?? [];
+    if (source.length === 0) {
+      return;
+    }
+    const latest = source
+      .map((item) => item.createdAt)
+      .sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+    if (!latest) {
+      return;
+    }
+
+    if (latestSeenRef.current) {
+      const lastSeenMs = Date.parse(latestSeenRef.current);
+      const newCount = source.filter((item) => Date.parse(item.createdAt) > lastSeenMs).length;
+      setNewSinceSync(newCount);
+    }
+
+    latestSeenRef.current = latest;
+    setLastSyncAt(new Date());
+  }, [data?.items]);
 
   const items = useMemo(
     () =>
@@ -49,6 +85,27 @@ export function NotificationsPage() {
 
         {data ? (
           <>
+            <Section
+              title={t("k_329")}
+              action={
+                <div className="chip-row">
+                  <span className="chip good">{t("k_330")}</span>
+                  <span className="chip">{t("k_333")}</span>
+                </div>
+              }
+            >
+              <div className="stats-grid">
+                <article className="stat-card">
+                  <p>{t("k_331")}</p>
+                  <strong>{lastSyncAt ? formatDate(lastSyncAt.toISOString(), lang) : "—"}</strong>
+                </article>
+                <article className={`stat-card${newSinceSync > 0 ? " good" : ""}`}>
+                  <p>{t("k_332")}</p>
+                  <strong>{newSinceSync}</strong>
+                </article>
+              </div>
+            </Section>
+
             <Section
               title={t("k_211")}
               action={

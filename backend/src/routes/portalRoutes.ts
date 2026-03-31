@@ -10,6 +10,7 @@ import { predictionService } from "../services/predictionService";
 import { scheduleService } from "../services/scheduleService";
 import { storageService } from "../services/storageService";
 import { studentProfileService } from "../services/studentProfileService";
+import { academicStoreService } from "../services/academicStoreService";
 
 export const portalRoutes = Router();
 
@@ -26,6 +27,29 @@ const aiChatSchema = z.object({
     )
     .max(20)
     .optional(),
+});
+
+const achievementSubmitSchema = z.object({
+  studentId: z.string().trim().min(1).optional(),
+  title: z.string().trim().min(2).max(120),
+  type: z.enum(["academic", "sport", "creative", "social"]),
+  badge: z.string().trim().min(2).max(120).optional(),
+  date: z.string().trim().min(6).max(40).optional(),
+  points: z.number().int().min(1).max(500).optional(),
+  proofUrl: z.string().trim().url().max(512).optional(),
+  proofNote: z.string().trim().max(2000).optional(),
+  proofAttachment: z
+    .object({
+      fileName: z.string().trim().min(1).max(255),
+      mimeType: z.string().trim().min(1).max(120),
+      dataUrl: z.string().trim().startsWith("data:").max(3_000_000),
+    })
+    .optional(),
+});
+
+const achievementVerifySchema = z.object({
+  method: z.string().trim().max(80).optional(),
+  evidence: z.string().trim().max(500).optional(),
 });
 
 const summarizePredictions = (payload: Awaited<ReturnType<typeof predictionService.getPredictionsByRole>>) => {
@@ -71,6 +95,90 @@ portalRoutes.get("/achievements", async (req, res) => {
   }
   const achievements = await analyticsService.getAchievements(req.user);
   res.json(achievements);
+});
+
+portalRoutes.post("/achievements", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ message: "Требуется вход в систему" });
+    return;
+  }
+
+  const parsed = achievementSubmitSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Неверные данные запроса", errors: parsed.error.flatten() });
+    return;
+  }
+
+  const payload = parsed.data;
+  let studentId = "";
+  if (req.user.role === "student") {
+    studentId = req.user.linkedStudentId ?? req.user.id;
+  } else if (req.user.role === "parent") {
+    if (!req.user.linkedStudentId) {
+      res.status(400).json({ message: "Для этой роли нужно указать связанного ученика" });
+      return;
+    }
+    studentId = req.user.linkedStudentId;
+  } else {
+    if (!payload.studentId) {
+      res.status(400).json({ message: "Нужно указать ученика" });
+      return;
+    }
+    studentId = payload.studentId;
+  }
+
+  const created = academicStoreService.createAchievement({
+    studentId,
+    title: payload.title,
+    type: payload.type,
+    badge: payload.badge ?? "Заявка с пруфом",
+    date: payload.date ?? new Date().toISOString().slice(0, 10),
+    points: payload.points ?? 10,
+    proofUrl: payload.proofUrl,
+    proofNote: payload.proofNote,
+    proofAttachment: payload.proofAttachment,
+    submittedBy: req.user.name,
+  });
+
+  res.status(201).json({ item: created });
+});
+
+portalRoutes.post("/achievements/:achievementId/verify", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ message: "Требуется вход в систему" });
+    return;
+  }
+
+  if (req.user.role !== "teacher" && req.user.role !== "admin") {
+    res.status(403).json({ message: "Недостаточно прав доступа" });
+    return;
+  }
+
+  const parsed = achievementVerifySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Неверные данные запроса", errors: parsed.error.flatten() });
+    return;
+  }
+
+  const achievementId = (req.params.achievementId ?? "").trim();
+  if (!achievementId) {
+    res.status(400).json({ message: "Нужно указать достижение" });
+    return;
+  }
+
+  try {
+    const verified = academicStoreService.verifyAchievement({
+      achievementId,
+      verifiedBy: req.user.name,
+      method: parsed.data.method,
+      evidence: parsed.data.evidence,
+    });
+    res.json({ item: verified });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Не удалось подтвердить достижение";
+    const status = message === "Achievement not found" ? 404 : 500;
+    res.status(status).json({ message });
+  }
 });
 
 portalRoutes.get("/events", async (req, res) => {

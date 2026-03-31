@@ -21,6 +21,22 @@ export type Achievement = {
   badge: string;
   date: string;
   points: number;
+  proofUrl?: string;
+  proofNote?: string;
+  proofAttachment?: {
+    fileName: string;
+    mimeType: string;
+    dataUrl: string;
+  };
+  submittedBy?: string;
+  submittedAt?: string;
+  verification?: {
+    status: "verified" | "pending";
+    verifiedAt?: string;
+    verifiedBy?: string;
+    method?: string;
+    evidence?: string;
+  };
 };
 
 export type EventItem = {
@@ -87,6 +103,12 @@ export type TeacherDashboard = {
   studentAchievements: Achievement[];
   events: EventItem[];
   aiSummary: string;
+  teacherEfficiency?: {
+    weeklyHoursSaved: number;
+    automatedActions: number;
+    recommendedActions: number;
+    focusClasses: string[];
+  };
 };
 
 export type ParentDashboard = {
@@ -97,6 +119,13 @@ export type ParentDashboard = {
   achievements: Achievement[];
   events: EventItem[];
   aiSummary: string;
+  weeklySummary?: {
+    periodLabel: string;
+    delta: number;
+    wins: string[];
+    risks: string[];
+    plan: string[];
+  };
 };
 
 export type AdminDashboard = {
@@ -156,6 +185,11 @@ export type AiMentorResponse = {
   weakSides?: string[];
   recommendations: string[];
   trends?: { subject: string; trend: number }[];
+  explainability?: {
+    confidence: number;
+    drivers: string[];
+    source: string;
+  };
 };
 
 export type AdminAnalyticsResponse = {
@@ -340,7 +374,7 @@ export type AuthContextValue = {
   user: SafeUser | null;
   token: string | null;
   initialized: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, selectedRole: Role) => Promise<void>;
   logout: () => void;
 };
 

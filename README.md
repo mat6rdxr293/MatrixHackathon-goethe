@@ -32,6 +32,18 @@ setup_project.bat
 start_dev.bat
 ```
 
+3. Production-like run (frontend + backend HTTPS):
+```bat
+start_prod.bat
+```
+By default, the script looks for TLS files:
+- `frontend/.cert/localhost.pem` + `frontend/.cert/localhost-key.pem`
+- or `frontend/.cert/cert.pem` + `frontend/.cert/key.pem`
+- or `frontend/.cert/fullchain.pem` + `frontend/.cert/privkey.pem`
+- or legacy `frontend/.cert/localhost.crt` + `frontend/.cert/localhost.key`
+
+If they are missing, it auto-generates a local `.pfx` certificate and uses it for both services.
+
 ### Option B: Manual commands
 1. Install dependencies
 ```bash

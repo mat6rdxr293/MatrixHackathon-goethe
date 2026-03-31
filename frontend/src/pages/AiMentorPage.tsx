@@ -251,6 +251,32 @@ export function AiMentorPage() {
               </ul>
             </Section>
 
+            {mentorState.data.explainability ? (
+              <Section title={t("k_313")}>
+                <div className="stats-grid">
+                  <article className="stat-card">
+                    <p>{t("k_314")}</p>
+                    <strong>{mentorState.data.explainability.confidence}%</strong>
+                  </article>
+                  <article className="stat-card">
+                    <p>{t("k_316")}</p>
+                    <strong>
+                      {mentorState.data.explainability.source === "class-aggregates"
+                        ? t("k_335")
+                        : mentorState.data.explainability.source === "school-aggregates"
+                          ? t("k_336")
+                          : t("k_334")}
+                    </strong>
+                  </article>
+                </div>
+                <ul className="plain-list">
+                  {mentorState.data.explainability.drivers.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
+
             {mentorState.data.trends && mentorState.data.trends.length > 0 ? (
               <Section title={t("k_122")}>
                 <TrendBarChart

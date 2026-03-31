@@ -82,7 +82,7 @@ export function PortalLayout() {
             className="sidebar-collapse-btn"
             type="button"
             onClick={toggleCollapse}
-            title={sidebarCollapsed ? "Развернуть" : "Свернуть"}
+            title={sidebarCollapsed ? t("k_241") : t("k_242")}
           >
             {sidebarCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
           </button>

@@ -69,19 +69,19 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
     }
 
     const base = data.attendancePercent;
-    const months = ["Окт", "Ноя", "Дек", "Янв", "Фев", "Мар"];
+    const months = [t("k_271"), t("k_272"), t("k_273"), t("k_274"), t("k_275"), t("k_276")];
     return months.map((month, index) => ({
       month,
       percent: Math.max(80, Math.min(99, base - 4 + index)),
     }));
-  }, [data]);
+  }, [data, t]);
 
   return (
     <>
       {!isOwn ? (
         <button className="outline-button icon-button profile-back" type="button" onClick={() => navigate(-1)}>
           <ArrowLeft size={15} />
-          Назад
+          {t("k_154")}
         </button>
       ) : null}
 
@@ -94,24 +94,24 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
             <div className="student-profile-headline">
               <h2>{data.student.fullName}</h2>
               <p>
-                Класс {data.student.classId} · ID: {data.student.studentId}
+                {t("k_083")} {data.student.classId} · ID: {data.student.studentId}
               </p>
               <div className="student-profile-topstats">
                 <div>
                   <strong>{data.student.averageScore.toFixed(1)}</strong>
-                  <span>Средний</span>
+                  <span>{t("k_277")}</span>
                 </div>
                 <div>
                   <strong>{data.achievements.length}</strong>
-                  <span>Достижений</span>
+                  <span>{t("k_278")}</span>
                 </div>
                 <div>
                   <strong>{data.attendancePercent}%</strong>
-                  <span>Посещаемость</span>
+                  <span>{t("k_279")}</span>
                 </div>
                 <div>
                   <strong>{data.rank ? `#${data.rank}` : "—"}</strong>
-                  <span>Место</span>
+                  <span>{t("k_280")}</span>
                 </div>
               </div>
               <div className="chip-row">
@@ -122,7 +122,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                     </span>
                   ))
                 ) : (
-                  <span className="chip good">Все хорошо</span>
+                  <span className="chip good">{t("k_281")}</span>
                 )}
               </div>
             </div>
@@ -130,11 +130,11 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
 
           <div className="student-profile-tabs">
             {[
-              ["overview", "Обзор"],
-              ["grades", "Оценки"],
-              ["attendance", "Посещаемость"],
-              ["achievements", "Достижения"],
-              ["ai", "AI-разбор"],
+              ["overview", t("k_282")],
+              ["grades", t("k_283")],
+              ["attendance", t("k_279")],
+              ["achievements", t("k_014")],
+              ["ai", t("k_284")],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -149,7 +149,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
 
           {tab === "overview" ? (
             <div className="student-profile-grid">
-              <Section title="Успеваемость">
+              <Section title={t("k_029")}>
                 <div className="subject-bars-list">
                   {data.student.progress.map((subject) => {
                     const width = Math.min(100, Math.round((subject.current / 5) * 100));
@@ -174,28 +174,28 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
               <div className="student-profile-side">
                 <div className="student-mini-cards">
                   <article className="student-mini-card">
-                    <p>Позиция</p>
+                    <p>{t("k_285")}</p>
                     <strong>{data.rank ? `#${data.rank}` : "—"}</strong>
-                    <span>в школе</span>
+                    <span>{t("k_286")}</span>
                   </article>
                   <article className="student-mini-card">
-                    <p>Очков</p>
+                    <p>{t("k_287")}</p>
                     <strong>{data.points}</strong>
                     <span>XP</span>
                   </article>
                   <article className="student-mini-card">
-                    <p>Streak</p>
+                    <p>{t("k_306")}</p>
                     <strong>{data.streakDays}</strong>
-                    <span>дней</span>
+                    <span>{t("k_288")}</span>
                   </article>
                   <article className="student-mini-card">
-                    <p>Посещ.</p>
+                    <p>{t("k_289")}</p>
                     <strong>{data.attendancePercent}%</strong>
-                    <span>за месяц</span>
+                    <span>{t("k_290")}</span>
                   </article>
                 </div>
 
-                <Section title="Последние оценки">
+                <Section title={t("k_291")}>
                   <div className="recent-grade-list">
                     {data.recentGrades.slice(0, 6).map((grade) => (
                       <div key={`${grade.subject}-${grade.date}-${grade.score}`} className="recent-grade-item">
@@ -210,7 +210,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                 </Section>
               </div>
 
-              <Section title="Достижения">
+              <Section title={t("k_014")}>
                 <div className="achievement-stack">
                   {data.achievements.slice(0, 3).map((item) => (
                     <article key={item.id} className="achievement-stack-item">
@@ -229,17 +229,17 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
               <section className="profile-ai-panel">
                 <h3>
                   <Brain size={16} />
-                  AI-аналитика
+                  {t("k_292")}
                 </h3>
-                <p className="profile-ai-sub">Персональный разбор данных</p>
+                <p className="profile-ai-sub">{t("k_293")}</p>
                 <div className="profile-ai-risk">{data.ai.riskLabel}</div>
                 <p>{data.ai.summary}</p>
                 <div className="profile-ai-box">
-                  <small>ДЕЙСТВИЕ</small>
+                  <small>{t("k_294")}</small>
                   <span>{data.ai.action}</span>
                 </div>
                 <div className="profile-ai-box">
-                  <small>ВОЗМОЖНОСТЬ</small>
+                  <small>{t("k_295")}</small>
                   <span>{data.ai.opportunity}</span>
                 </div>
               </section>
@@ -247,14 +247,14 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
           ) : null}
 
           {tab === "grades" ? (
-            <Section title="Все оценки по предметам">
+            <Section title={t("k_296")}>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Предмет</th>
-                    <th>Текущий</th>
-                    <th>Тренд</th>
-                    <th>Статус</th>
+                    <th>{t("k_090")}</th>
+                    <th>{t("k_297")}</th>
+                    <th>{t("k_092")}</th>
+                    <th>{t("k_103")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -267,7 +267,11 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                         {subject.trend.toFixed(1)}
                       </td>
                       <td>
-                        {subject.risk ? <span className="chip warn">Риск</span> : <span className="chip good">Норма</span>}
+                        {subject.risk ? (
+                          <span className="chip warn">{t("k_198")}</span>
+                        ) : (
+                          <span className="chip good">{t("k_298")}</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -278,7 +282,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
 
           {tab === "attendance" ? (
             <div className="student-profile-grid compact">
-              <Section title="Посещаемость по месяцам">
+              <Section title={t("k_299")}>
                 <div className="attendance-months">
                   {attendanceByMonth.map((item) => (
                     <div key={item.month} className="attendance-month-item">
@@ -294,22 +298,22 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                 </div>
               </Section>
 
-              <Section title="Сводка">
+              <Section title={t("k_300")}>
                 <div className="attendance-summary">
                   <div>
                     <CalendarCheck size={16} />
                     <strong>{data.attendancePercent}%</strong>
-                    <span>средняя посещаемость</span>
+                    <span>{t("k_301")}</span>
                   </div>
                   <div>
                     <Flame size={16} />
                     <strong>{data.streakDays}</strong>
-                    <span>дней без пропусков</span>
+                    <span>{t("k_302")}</span>
                   </div>
                   <div>
                     <TrendingUp size={16} />
                     <strong>{Math.max(0, 100 - data.student.weakSubjects.length * 8)}%</strong>
-                    <span>учебная стабильность</span>
+                    <span>{t("k_303")}</span>
                   </div>
                 </div>
               </Section>
@@ -317,10 +321,10 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
           ) : null}
 
           {tab === "achievements" ? (
-            <Section title="Все достижения">
+            <Section title={t("k_304")}>
               <div className="achievement-stack">
                 {data.achievements.length === 0 ? (
-                  <p className="muted-inline">Достижений пока нет</p>
+                  <p className="muted-inline">{t("k_305")}</p>
                 ) : (
                   data.achievements.map((item) => (
                     <article key={item.id} className="achievement-stack-item">
@@ -345,17 +349,17 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
             <section className="profile-ai-panel standalone">
               <h3>
                 <Brain size={16} />
-                AI-аналитика
+                {t("k_292")}
               </h3>
-              <p className="profile-ai-sub">Персональный разбор данных</p>
+              <p className="profile-ai-sub">{t("k_293")}</p>
               <div className="profile-ai-risk">{data.ai.riskLabel}</div>
               <p>{data.ai.summary}</p>
               <div className="profile-ai-box">
-                <small>ДЕЙСТВИЕ</small>
+                <small>{t("k_294")}</small>
                 <span>{data.ai.action}</span>
               </div>
               <div className="profile-ai-box">
-                <small>ВОЗМОЖНОСТЬ</small>
+                <small>{t("k_295")}</small>
                 <span>{data.ai.opportunity}</span>
               </div>
             </section>

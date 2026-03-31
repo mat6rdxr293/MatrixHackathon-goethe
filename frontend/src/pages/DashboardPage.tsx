@@ -50,6 +50,15 @@ export function DashboardPage() {
   const parentAiText =
     mentorState.data?.summary ?? (dashboard.data?.role === "parent" ? dashboard.data.aiSummary : "");
 
+  const explainability = mentorState.data?.explainability;
+  const explainabilitySourceLabel = explainability
+    ? explainability.source === "class-aggregates"
+      ? t("k_335")
+      : explainability.source === "school-aggregates"
+        ? t("k_336")
+        : t("k_334")
+    : "";
+
   return (
     <PageTransition>
       <div className="page-layout">
@@ -57,30 +66,39 @@ export function DashboardPage() {
 
         {dashboard.data?.role === "student" ? (
           <>
-            <div className="stats-grid">
-              <StatCard title={t("k_071")} value={dashboard.data.averageScore.toFixed(1)} caption={t("k_072")} icon={GraduationCap} />
-              <StatCard
-                title={t("k_073")}
-                value={dashboard.data.periodDelta > 0 ? `+${dashboard.data.periodDelta}` : dashboard.data.periodDelta}
-                tone={dashboard.data.periodDelta < 0 ? "warn" : "good"}
-                icon={TrendingUp}
-              />
-              <StatCard title={t("k_074")} value={dashboard.data.weakSubjects.length} tone="warn" icon={AlertTriangle} />
+            <div className="dashboard-focus-border">
+              <h4 className="dashboard-focus-title">{t("k_071")}</h4>
+              <div className="stats-grid">
+                <StatCard title={t("k_071")} value={dashboard.data.averageScore.toFixed(1)} caption={t("k_072")} icon={GraduationCap} />
+                <StatCard
+                  title={t("k_073")}
+                  value={dashboard.data.periodDelta > 0 ? `+${dashboard.data.periodDelta}` : dashboard.data.periodDelta}
+                  tone={dashboard.data.periodDelta < 0 ? "warn" : "good"}
+                  icon={TrendingUp}
+                />
+                <StatCard title={t("k_074")} value={dashboard.data.weakSubjects.length} tone="warn" icon={AlertTriangle} />
+              </div>
             </div>
 
-            <Section title={t("k_075")}>
-              <div className="chip-row">
-                {dashboard.data.weakSubjects.map((subject) => (
-                  <span key={subject} className="chip warn">
-                    {subject}
-                  </span>
-                ))}
-              </div>
-            </Section>
+            <div className="dashboard-focus-border">
+              <h4 className="dashboard-focus-title">{t("k_075")}</h4>
+              <Section title={t("k_075")}>
+                <div className="chip-row">
+                  {dashboard.data.weakSubjects.map((subject) => (
+                    <span key={subject} className="chip warn">
+                      {subject}
+                    </span>
+                  ))}
+                </div>
+              </Section>
+            </div>
 
-            <Section title={t("k_029")}>
-              <MetricBarChart data={studentHistory} valueLabel={t("k_102")} />
-            </Section>
+            <div className="dashboard-focus-border">
+              <h4 className="dashboard-focus-title">{t("k_029")}</h4>
+              <Section title={t("k_029")}>
+                <MetricBarChart data={studentHistory} valueLabel={t("k_102")} />
+              </Section>
+            </div>
 
             <Section title={t("k_014")}>
               <div className="list-grid">
@@ -110,6 +128,21 @@ export function DashboardPage() {
                 </button>
               </div>
             </Section>
+
+            {explainability && !mentorState.loading ? (
+              <Section title={t("k_313")}>
+                <div className="stats-grid">
+                  <StatCard title={t("k_314")} value={`${explainability.confidence}%`} icon={BarChart3} />
+                  <StatCard title={t("k_316")} value={explainabilitySourceLabel} icon={BookOpenCheck} />
+                </div>
+                <h4>{t("k_315")}</h4>
+                <ul className="plain-list">
+                  {explainability.drivers.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
           </>
         ) : null}
 
@@ -120,6 +153,44 @@ export function DashboardPage() {
               <StatCard title={t("k_080")} value={dashboard.data.riskStudents.length} tone="warn" icon={AlertTriangle} />
               <StatCard title={t("k_081")} value={dashboard.data.studentAchievements.length} icon={Trophy} />
             </div>
+
+            {dashboard.data.teacherEfficiency ? (
+              <Section title={t("k_307")}>
+                <div className="stats-grid">
+                  <StatCard
+                    title={t("k_308")}
+                    value={dashboard.data.teacherEfficiency.weeklyHoursSaved}
+                    caption={t("k_309")}
+                    icon={Sparkles}
+                  />
+                  <StatCard
+                    title={t("k_310")}
+                    value={dashboard.data.teacherEfficiency.automatedActions}
+                    caption={t("k_311")}
+                    icon={BookOpenCheck}
+                  />
+                  <StatCard
+                    title={t("k_337")}
+                    value={dashboard.data.teacherEfficiency.recommendedActions}
+                    caption={t("k_338")}
+                    tone="warn"
+                    icon={AlertTriangle}
+                  />
+                </div>
+                <div className="chip-row">
+                  <span className="chip">{t("k_312")}:</span>
+                  {dashboard.data.teacherEfficiency.focusClasses.length > 0 ? (
+                    dashboard.data.teacherEfficiency.focusClasses.map((classId) => (
+                      <span key={classId} className="chip warn">
+                        {classId}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="chip">{t("k_340")}</span>
+                  )}
+                </div>
+              </Section>
+            ) : null}
 
             <Section title={t("k_082")}>
               <MetricBarChart
@@ -152,6 +223,20 @@ export function DashboardPage() {
             <Section title={t("k_085")}>
               {mentorState.loading ? <p className="thinking-text">{t("k_240")}</p> : <p>{teacherAiText}</p>}
             </Section>
+
+            {explainability && !mentorState.loading ? (
+              <Section title={t("k_313")}>
+                <div className="stats-grid">
+                  <StatCard title={t("k_314")} value={`${explainability.confidence}%`} icon={BarChart3} />
+                  <StatCard title={t("k_316")} value={explainabilitySourceLabel} icon={BookOpenCheck} />
+                </div>
+                <ul className="plain-list">
+                  {explainability.drivers.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
           </>
         ) : null}
 
@@ -197,6 +282,68 @@ export function DashboardPage() {
             <Section title={t("k_093")}>
               {mentorState.loading ? <p className="thinking-text">{t("k_240")}</p> : <p>{parentAiText}</p>}
             </Section>
+
+            {dashboard.data.weeklySummary ? (
+              <Section title={t("k_317")}>
+                <div className="stats-grid">
+                  <StatCard
+                    title={dashboard.data.weeklySummary.delta >= 0 ? t("k_321") : t("k_322")}
+                    value={`${dashboard.data.weeklySummary.delta > 0 ? "+" : ""}${dashboard.data.weeklySummary.delta}`}
+                    caption={t("k_339")}
+                    tone={dashboard.data.weeklySummary.delta >= 0 ? "good" : "warn"}
+                    icon={TrendingUp}
+                  />
+                  <StatCard title={t("k_318")} value={dashboard.data.weeklySummary.wins.length} icon={Trophy} />
+                  <StatCard title={t("k_319")} value={dashboard.data.weeklySummary.risks.length} tone="warn" icon={AlertTriangle} />
+                </div>
+                <div className="list-grid">
+                  <article className="mini-card">
+                    <h4>{t("k_318")}</h4>
+                    <ul className="plain-list">
+                      {(dashboard.data.weeklySummary.wins.length > 0
+                        ? dashboard.data.weeklySummary.wins
+                        : [t("k_340")]).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </article>
+                  <article className="mini-card">
+                    <h4>{t("k_319")}</h4>
+                    <ul className="plain-list">
+                      {(dashboard.data.weeklySummary.risks.length > 0
+                        ? dashboard.data.weeklySummary.risks
+                        : [t("k_340")]).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </article>
+                  <article className="mini-card">
+                    <h4>{t("k_320")}</h4>
+                    <ul className="plain-list">
+                      {(dashboard.data.weeklySummary.plan.length > 0
+                        ? dashboard.data.weeklySummary.plan
+                        : [t("k_340")]).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </article>
+                </div>
+              </Section>
+            ) : null}
+
+            {explainability && !mentorState.loading ? (
+              <Section title={t("k_313")}>
+                <div className="stats-grid">
+                  <StatCard title={t("k_314")} value={`${explainability.confidence}%`} icon={BarChart3} />
+                  <StatCard title={t("k_316")} value={explainabilitySourceLabel} icon={BookOpenCheck} />
+                </div>
+                <ul className="plain-list">
+                  {explainability.drivers.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
           </>
         ) : null}
 

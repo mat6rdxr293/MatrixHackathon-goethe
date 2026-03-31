@@ -1,4 +1,5 @@
-﻿import { type FormEvent, useState } from "react";
+﻿import { X } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
 import { eventTypeLabelKey, roleLabelKey } from "../config/labels";
 import { useI18n } from "../hooks/useI18n";
 import { useApiData } from "../hooks/useApiData";
@@ -25,6 +26,7 @@ export function AdminContentPage() {
   const [filter, setFilter] = useState<EventType | "all">("all");
   const [sending, setSending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isComposerOpen, setComposerOpen] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -47,6 +49,7 @@ export function AdminContentPage() {
       setDescription("");
       setTargetClassIdsRaw("");
       setTargetRoles([]);
+      setComposerOpen(false);
       await refresh();
     } catch (err) {
       setSubmitError(getErrorMessage(err));
@@ -57,72 +60,31 @@ export function AdminContentPage() {
 
   const filtered = data?.items.filter((item) => (filter === "all" ? true : item.type === filter)) ?? [];
 
+  useEffect(() => {
+    if (!isComposerOpen) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setComposerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isComposerOpen]);
+
   return (
     <PageTransition>
       <div className="page-layout">
-        <Section title={t("k_146")}>
-          <form className="admin-form" onSubmit={submit}>
-            <label>
-              {t("k_147")}
-              <select value={type} onChange={(event) => setType(event.target.value as EventType)}>
-                <option value="news">{t("k_005")}</option>
-                <option value="event">{t("k_006")}</option>
-                <option value="announcement">{t("k_007")}</option>
-              </select>
-            </label>
-            <label>
-              {t("k_148")}
-              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
-            </label>
-            <label>
-              {t("k_149")}
-              <input value={title} onChange={(event) => setTitle(event.target.value)} minLength={4} required />
-            </label>
-            <label>
-              {t("k_150")}
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                minLength={8}
-                required
-              />
-            </label>
-            <label>
-              {t("k_224")}
-              <div className="chip-row">
-                {(["student", "teacher", "parent", "admin"] as Role[]).map((role) => {
-                  const active = targetRoles.includes(role);
-                  return (
-                    <button
-                      key={role}
-                      type="button"
-                      className={active ? "chip-button active" : "chip-button"}
-                      onClick={() =>
-                        setTargetRoles((prev) =>
-                          prev.includes(role) ? prev.filter((item) => item !== role) : [...prev, role],
-                        )
-                      }
-                    >
-                      {t(roleLabelKey(role))}
-                    </button>
-                  );
-                })}
-              </div>
-            </label>
-            <label>
-              {t("k_225")}
-              <input
-                value={targetClassIdsRaw}
-                onChange={(event) => setTargetClassIdsRaw(event.target.value)}
-                placeholder={classesState.data?.items.map((item) => item.classId).join(", ") || ""}
-              />
-            </label>
-            {submitError ? <p className="form-error">{submitError}</p> : null}
-            <button className="solid-button" type="submit" disabled={sending}>
-              {sending ? t("k_151") : t("k_152")}
-            </button>
-          </form>
-        </Section>
+        <section className="users-actions-card content-compose-actions">
+          <div className="users-actions-copy">
+            <h3>{t("k_146")}</h3>
+            <p>{t("k_153")}</p>
+          </div>
+          <button className="solid-button content-compose-open" type="button" onClick={() => setComposerOpen(true)}>
+            {t("k_146")}
+          </button>
+        </section>
 
         <DataState loading={loading} error={error} onRetry={refresh} />
 
@@ -180,9 +142,86 @@ export function AdminContentPage() {
             </div>
           </Section>
         ) : null}
+
+        <button
+          className={isComposerOpen ? "users-modal-backdrop show" : "users-modal-backdrop"}
+          type="button"
+          aria-hidden={isComposerOpen ? "false" : "true"}
+          tabIndex={-1}
+          onClick={() => setComposerOpen(false)}
+        />
+
+        <aside className={isComposerOpen ? "users-modal content-compose-modal open" : "users-modal content-compose-modal"}>
+          <header className="users-modal-head">
+            <h3>{t("k_146")}</h3>
+            <button className="icon-btn users-modal-close" type="button" onClick={() => setComposerOpen(false)}>
+              <X size={18} />
+            </button>
+          </header>
+
+          <form className="admin-form content-compose-form" onSubmit={submit}>
+            <label>
+              {t("k_149")}
+              <input value={title} onChange={(event) => setTitle(event.target.value)} minLength={4} required />
+            </label>
+            <label>
+              {t("k_147")}
+              <select value={type} onChange={(event) => setType(event.target.value as EventType)}>
+                <option value="news">{t("k_005")}</option>
+                <option value="event">{t("k_006")}</option>
+                <option value="announcement">{t("k_007")}</option>
+              </select>
+            </label>
+            <label>
+              {t("k_148")}
+              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+            </label>
+            <label>
+              {t("k_225")}
+              <input
+                value={targetClassIdsRaw}
+                onChange={(event) => setTargetClassIdsRaw(event.target.value)}
+                placeholder={classesState.data?.items.map((item) => item.classId).join(", ") || ""}
+              />
+            </label>
+            <label>
+              {t("k_150")}
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                minLength={8}
+                required
+              />
+            </label>
+            <label>
+              {t("k_224")}
+              <div className="chip-row">
+                {(["student", "teacher", "parent", "admin"] as Role[]).map((role) => {
+                  const active = targetRoles.includes(role);
+                  return (
+                    <button
+                      key={role}
+                      type="button"
+                      className={active ? "chip-button active" : "chip-button"}
+                      onClick={() =>
+                        setTargetRoles((prev) =>
+                          prev.includes(role) ? prev.filter((item) => item !== role) : [...prev, role],
+                        )
+                      }
+                    >
+                      {t(roleLabelKey(role))}
+                    </button>
+                  );
+                })}
+              </div>
+            </label>
+            {submitError ? <p className="form-error">{submitError}</p> : null}
+            <button className="solid-button content-publish-button" type="submit" disabled={sending}>
+              {sending ? t("k_151") : t("k_152")}
+            </button>
+          </form>
+        </aside>
       </div>
     </PageTransition>
   );
 }
-
-

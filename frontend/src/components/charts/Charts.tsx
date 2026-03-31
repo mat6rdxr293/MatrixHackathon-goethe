@@ -15,6 +15,9 @@ import type { SubjectProgress } from "../../types/portal";
 
 const seriesColors = ["#2563eb", "#0ea5e9", "#14b8a6", "#22c55e", "#f59e0b", "#ef4444"];
 
+const chartAxisTick = { fill: "#507382", fontSize: 12 };
+const chartMargin = { top: 16, right: 18, left: 8, bottom: 14 };
+
 export function MetricBarChart({
   data,
   valueLabel,
@@ -25,16 +28,16 @@ export function MetricBarChart({
   return (
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <BarChart data={data} margin={chartMargin} barCategoryGap="38%">
           <CartesianGrid strokeDasharray="3 3" stroke="#dbe8ec" />
-          <XAxis dataKey="label" tick={{ fill: "#507382", fontSize: 12 }} />
-          <YAxis tick={{ fill: "#507382", fontSize: 12 }} />
+          <XAxis dataKey="label" tick={chartAxisTick} tickMargin={10} height={52} interval={0} />
+          <YAxis tick={chartAxisTick} width={40} domain={[0, (max: number) => Math.ceil((max || 0) * 1.1)]} />
           <Tooltip
             cursor={{ fill: "rgba(20, 116, 134, 0.08)" }}
             contentStyle={{ borderRadius: 12, border: "1px solid #cfe0e5" }}
           />
           <Legend />
-          <Bar name={valueLabel} dataKey="value" radius={[8, 8, 0, 0]}>
+          <Bar name={valueLabel} dataKey="value" radius={[6, 6, 0, 0]} barSize={14} maxBarSize={18}>
             {data.map((entry) => (
               <Cell
                 key={`${entry.label}-${entry.value}`}
@@ -55,18 +58,21 @@ export function TrendBarChart({
   data: { label: string; value: number }[];
   valueLabel: string;
 }) {
+  const maxAbs = Math.max(0, ...data.map((item) => Math.abs(item.value)));
+  const trendDomain = Number((maxAbs * 1.2 + 0.01).toFixed(2));
+
   return (
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height={240}>
-        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <BarChart data={data} margin={chartMargin} barCategoryGap="40%">
           <CartesianGrid strokeDasharray="3 3" stroke="#dbe8ec" />
-          <XAxis dataKey="label" tick={{ fill: "#507382", fontSize: 12 }} />
-          <YAxis tick={{ fill: "#507382", fontSize: 12 }} />
+          <XAxis dataKey="label" tick={chartAxisTick} tickMargin={10} height={52} interval={0} />
+          <YAxis tick={chartAxisTick} width={40} domain={[-trendDomain, trendDomain]} />
           <Tooltip
             cursor={{ fill: "rgba(20, 116, 134, 0.08)" }}
             contentStyle={{ borderRadius: 12, border: "1px solid #cfe0e5" }}
           />
-          <Bar name={valueLabel} dataKey="value" radius={[8, 8, 0, 0]}>
+          <Bar name={valueLabel} dataKey="value" barSize={14} maxBarSize={18}>
             {data.map((entry) => (
               <Cell
                 key={`${entry.label}-${entry.value}`}
@@ -102,10 +108,10 @@ export function StudentHistoryChart({
   return (
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <LineChart data={chartData} margin={chartMargin}>
           <CartesianGrid strokeDasharray="3 3" stroke="#dbe8ec" />
-          <XAxis dataKey="date" tick={{ fill: "#507382", fontSize: 12 }} />
-          <YAxis domain={[3, 5]} tick={{ fill: "#507382", fontSize: 12 }} />
+          <XAxis dataKey="date" tick={chartAxisTick} tickMargin={10} height={44} />
+          <YAxis domain={[2.9, 5.1]} tick={chartAxisTick} width={40} />
           <Tooltip
             contentStyle={{ borderRadius: 12, border: "1px solid #cfe0e5" }}
             formatter={(value) => {

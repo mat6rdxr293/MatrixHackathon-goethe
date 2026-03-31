@@ -12,7 +12,7 @@ export function ProgressPage() {
   const { t } = useI18n();
   const { data, loading, error, refresh } = useApiData<ProgressResponse>("/api/progress");
   const [subjectFilter, setSubjectFilter] = useState<"all" | "risk">("all");
-  const [period, setPeriod] = useState("Месяц");
+  const [period, setPeriod] = useState(t("k_246"));
 
   const activePeriod =
     data && "periodSwitch" in data && data.periodSwitch.length > 0
