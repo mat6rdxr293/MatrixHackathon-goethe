@@ -1,6 +1,9 @@
-import { ScheduleEntry, ScheduleKind, User } from "../types";
+﻿import { ScheduleEntry, ScheduleKind, User } from "../types";
+import { evaluateScheduleQuality } from "../analytics/schedule/scheduleQuality";
+import { AnalysisPreset } from "../analytics/types";
 import { bilimClassService } from "./bilimClassService";
 import { academicStoreService } from "./academicStoreService";
+import { generateLLMSummaryFromStructuredData } from "./llm/llmSummaryService";
 import { notificationService } from "./notificationService";
 import { scheduleStoreService } from "./scheduleStoreService";
 import { storageService } from "./storageService";
@@ -50,6 +53,7 @@ export type ScheduleGenerateInput = {
   streams?: StreamDefinition[];
   teacherBusy?: TeacherBusy[];
   weights?: PlannerWeightOverrides;
+  analysisPreset?: AnalysisPreset;
 };
 
 export type TeacherAbsenceInput = {
@@ -465,156 +469,90 @@ const orderRequirements = (
     return a.classId.localeCompare(b.classId) || a.subject.localeCompare(b.subject);
   });
 
-const buildAiReview = (
+const buildAiReviewFromAnalytics = async (
   entries: ScheduleEntry[],
   days: number[],
   slotsPerDay: number,
   unscheduledCount: number,
   weights: PlannerWeights,
-): ScheduleAiReview => {
-  const classIds = [...new Set(entries.map((entry) => entry.classId))];
-  const teacherIds = [...new Set(entries.map((entry) => entry.teacherId))];
-  const totalSlotUnits = entries.reduce((sum, entry) => sum + entry.duration, 0);
-  const lateSlotUnits = entries.reduce(
-    (sum, entry) => sum + slotsByDuration(entry.slot, entry.duration).filter((slot) => slot > 6).length,
-    0,
-  );
+  analysisPreset: AnalysisPreset,
+) => {
+  const evaluation = evaluateScheduleQuality({
+    entries,
+    days,
+    slotsPerDay,
+    unscheduledCount,
+    analysisPreset,
+  });
 
-  let classGapUnitsTotal = 0;
-  let teacherGapUnitsTotal = 0;
-  let repeatedSubjectExtras = 0;
-  let classDayOverloads = 0;
-  let teacherDayOverloads = 0;
+  const fallbackSummary = `Качество расписания: ${evaluation.score}/100 (${evaluation.qualityLevel}).`;
+  const fallbackRecommendations =
+    evaluation.foundIssues.length > 0
+      ? evaluation.foundIssues.slice(0, 3)
+      : [
+          "Сетка расписания стабильна: удерживайте баланс по нагрузке и поздним урокам.",
+          "Проверяйте качество расписания при каждом крупном изменении.",
+        ];
 
-  const classDayLoads: number[] = [];
-  for (const classId of classIds) {
-    for (const day of days) {
-      const dayEntries = entries.filter((entry) => entry.classId === classId && entry.day === day);
-      const slots = dayEntries.flatMap((entry) => slotsByDuration(entry.slot, entry.duration));
-      const dayLoad = dayEntries.reduce((sum, entry) => sum + entry.duration, 0);
-      classDayLoads.push(dayLoad);
-      classGapUnitsTotal += gapUnits(slots);
-      if (dayLoad > 7) {
-        classDayOverloads += 1;
-      }
-      const bySubject = new Map<string, number>();
-      for (const entry of dayEntries) {
-        bySubject.set(entry.subject, (bySubject.get(entry.subject) ?? 0) + 1);
-      }
-      for (const count of bySubject.values()) {
-        if (count > 1) {
-          repeatedSubjectExtras += count - 1;
-        }
-      }
-    }
-  }
-
-  const teacherDayLoads: number[] = [];
-  for (const teacherId of teacherIds) {
-    for (const day of days) {
-      const dayEntries = entries.filter((entry) => entry.teacherId === teacherId && entry.day === day);
-      const slots = dayEntries.flatMap((entry) => slotsByDuration(entry.slot, entry.duration));
-      const dayLoad = dayEntries.reduce((sum, entry) => sum + entry.duration, 0);
-      teacherDayLoads.push(dayLoad);
-      teacherGapUnitsTotal += gapUnits(slots);
-      if (dayLoad > 6) {
-        teacherDayOverloads += 1;
-      }
-    }
-  }
-
-  const classDayCount = Math.max(1, classIds.length * days.length);
-  const teacherDayCount = Math.max(1, teacherIds.length * days.length);
-
-  const lateLessonShare = totalSlotUnits > 0 ? lateSlotUnits / totalSlotUnits : 0;
-  const studentGapAvg = classGapUnitsTotal / classDayCount;
-  const teacherGapAvg = teacherGapUnitsTotal / teacherDayCount;
-  const studentOverloadRate = classDayOverloads / classDayCount;
-  const teacherOverloadRate = teacherDayOverloads / teacherDayCount;
-  const repeatedSubjectRate = entries.length > 0 ? repeatedSubjectExtras / entries.length : 0;
-
-  const studentGapNorm = clamp(studentGapAvg / 2, 0, 1);
-  const teacherGapNorm = clamp(teacherGapAvg / 2, 0, 1);
-  const lateNorm = clamp(lateLessonShare / 0.35, 0, 1);
-  const repeatedNorm = clamp(repeatedSubjectRate / 0.3, 0, 1);
+  const llmSummary = await generateLLMSummaryFromStructuredData({
+    role: "admin",
+    kind: "schedule-quality",
+    structuredData: {
+      evaluation,
+      slotsPerDay,
+      days,
+      lessonCount: entries.length,
+    },
+    fallbackSummary,
+    fallbackRecommendations,
+  });
 
   const studentPenalty =
-    studentGapNorm * 22 + lateNorm * 18 + repeatedNorm * 24 + studentOverloadRate * 26;
-  const teacherPenalty = teacherGapNorm * 24 + lateNorm * 12 + teacherOverloadRate * 34;
+    evaluation.metrics.classGapAvg * 8 +
+    evaluation.metrics.lateLessonShare * 35 +
+    evaluation.metrics.overloadedDayRate * 32 +
+    evaluation.metrics.unevenLoadScore * 8;
 
-  const studentScore = clamp(Math.round(100 - studentPenalty), 0, 100);
-  const teacherScore = clamp(Math.round(100 - teacherPenalty), 0, 100);
-  const baseOverall = studentScore * 0.55 + teacherScore * 0.45;
-  const overallScore = clamp(Math.round(baseOverall - Math.min(10, unscheduledCount * 0.8)), 0, 100);
+  const teacherPenalty =
+    evaluation.metrics.teacherGapAvg * 10 +
+    evaluation.metrics.teacherConflicts * 15 +
+    evaluation.metrics.roomConflicts * 8 +
+    evaluation.metrics.overloadedDayRate * 12;
 
-  const avgClassLoad = average(classDayLoads);
-  const avgTeacherLoad = average(teacherDayLoads);
-  const maxClassLoad = classDayLoads.length > 0 ? Math.max(...classDayLoads) : 0;
-  const maxTeacherLoad = teacherDayLoads.length > 0 ? Math.max(...teacherDayLoads) : 0;
-
-  const recommendations: string[] = [];
-  if (lateLessonShare > 0.24) {
-    recommendations.push("Снизить долю занятий после 6-го урока, особенно для младших и средних классов.");
-  }
-  if (studentGapAvg > 0.75) {
-    recommendations.push("Убрать окна внутри дня у классов: переносить разорванные пары на соседние слоты.");
-  }
-  if (teacherGapAvg > 0.75) {
-    recommendations.push("Сократить окна у учителей за счет более плотного распределения уроков по дням.");
-  }
-  if (repeatedSubjectRate > 0.18) {
-    recommendations.push("Разнести одинаковые предметы по разным дням, чтобы снизить утомляемость и монотонность.");
-  }
-  if (studentOverloadRate > 0.2) {
-    recommendations.push("Ограничить дни с перегрузом классов и выровнять нагрузку по неделе.");
-  }
-  if (teacherOverloadRate > 0.2) {
-    recommendations.push("Ограничить дни с перегрузом учителей и перераспределить часы на менее загруженные дни.");
-  }
-  if (unscheduledCount > 0) {
-    recommendations.push("Перепроверить ограничения по учителям и кабинетам: часть занятий осталась неразмещенной.");
-  }
-  if (recommendations.length === 0) {
-    recommendations.push("График выглядит сбалансированным: критичных узких мест по нагрузке не обнаружено.");
-  }
-
-  const summaryTone =
-    overallScore >= 85
-      ? "Расписание выглядит хорошо сбалансированным."
-      : overallScore >= 70
-        ? "Расписание в целом рабочее, но есть зоны для улучшения."
-        : "Расписание требует донастройки, чтобы снизить нагрузку и количество окон.";
+  const studentsScore = clamp(Math.round(100 - studentPenalty), 0, 100);
+  const teachersScore = clamp(Math.round(100 - teacherPenalty), 0, 100);
 
   return {
-    model: "ai-constraint-planner-v2",
+    model: "rule-based-schedule-evaluator-v1",
     weights,
     scores: {
-      students: studentScore,
-      teachers: teacherScore,
-      overall: overallScore,
+      students: studentsScore,
+      teachers: teachersScore,
+      overall: evaluation.score,
     },
     commentary: {
-      summary: `${summaryTone} Общая оценка удобства: ${overallScore}/100.`,
-      students: `Ученики: ${studentScore}/100. Средняя дневная нагрузка ${round2(
-        avgClassLoad,
-      )} урока, максимум ${maxClassLoad}. Доля поздних уроков: ${round2(lateLessonShare * 100)}%.`,
-      teachers: `Учителя: ${teacherScore}/100. Средняя дневная нагрузка ${round2(
-        avgTeacherLoad,
-      )} урока, максимум ${maxTeacherLoad}.`,
-      recommendations,
+      summary: llmSummary.summary,
+      students: `Окна у классов: ${round2(evaluation.metrics.classGapAvg)}, поздние уроки: ${round2(
+        evaluation.metrics.lateLessonShare * 100,
+      )}%`,
+      teachers: `Окна у учителей: ${round2(evaluation.metrics.teacherGapAvg)}, конфликты учителей: ${
+        evaluation.metrics.teacherConflicts
+      }`,
+      recommendations: llmSummary.recommendations,
     },
     metrics: {
-      totalLessons: entries.length,
-      classCount: classIds.length,
-      teacherCount: teacherIds.length,
-      lateLessonShare: round2(lateLessonShare),
-      studentGapAvg: round2(studentGapAvg),
-      teacherGapAvg: round2(teacherGapAvg),
-      studentOverloadRate: round2(studentOverloadRate),
-      teacherOverloadRate: round2(teacherOverloadRate),
-      repeatedSubjectRate: round2(repeatedSubjectRate),
-      unscheduled: unscheduledCount,
+      totalLessons: evaluation.metrics.totalLessons,
+      classCount: evaluation.metrics.classCount,
+      teacherCount: evaluation.metrics.teacherCount,
+      lateLessonShare: evaluation.metrics.lateLessonShare,
+      studentGapAvg: evaluation.metrics.classGapAvg,
+      teacherGapAvg: evaluation.metrics.teacherGapAvg,
+      studentOverloadRate: evaluation.metrics.overloadedDayRate,
+      teacherOverloadRate: evaluation.metrics.overloadedDayRate,
+      repeatedSubjectRate: evaluation.metrics.unevenLoadScore,
+      unscheduled: evaluation.metrics.unscheduledCount,
     },
+    evaluation,
   };
 };
 
@@ -802,7 +740,7 @@ export const scheduleService = {
     }
 
     const saved = scheduleStoreService.replaceSchedule(entries);
-    const aiReview = buildAiReview(saved, days, slotsPerDay, unscheduled.length, plannerWeights);
+    const aiReview = await buildAiReviewFromAnalytics(saved, days, slotsPerDay, unscheduled.length, plannerWeights, input.analysisPreset ?? "balanced");
 
     notificationService.create({
       type: "schedule",
@@ -942,3 +880,6 @@ export const scheduleService = {
     return scheduleStoreService.listScheduleAll().filter((item) => item.status !== "planned");
   },
 };
+
+
+

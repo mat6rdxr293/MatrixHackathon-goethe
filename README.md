@@ -174,3 +174,52 @@ setup_project.bat
 | Родитель | `parent@aqbobek.edu` | `parent123` |
 | Ученик | `student@aqbobek.edu` | `student123` |
 | Ученик | `student2@aqbobek.edu` | `student123` |
+
+---
+
+## LLM Fallback Chain (OpenAI -> Local LLM -> Demo)
+
+The project now uses a 3-step AI pipeline:
+
+1. OpenAI API (primary)
+2. Local Python LLM service (fallback)
+3. Deterministic demo answers from internal analytics (final fallback)
+
+### Local LLM service
+
+- Path: `local_llm/`
+- API: `http://127.0.0.1:8009`
+- Endpoints:
+  - `GET /health`
+  - `POST /v1/generate`
+
+### Setup
+
+Run once:
+
+```bat
+setup_project.bat
+```
+
+This now does all of the following:
+- installs backend/frontend npm dependencies
+- creates `local_llm/.venv`
+- installs Python dependencies for local LLM
+- detects hardware profile (CPU/CUDA)
+- downloads local model for fallback
+
+### Launch
+
+- Dev: `start_dev.bat`
+- Prod: `start_prod.bat`
+
+Both scripts now try to start local LLM automatically and pass `LOCAL_LLM_URL` to backend.
+
+### AI mode in API
+
+AI responses now expose the actual mode:
+- `openai`
+- `local`
+- `demo`
+
+So UI can show exactly where the answer came from.

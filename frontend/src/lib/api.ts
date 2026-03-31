@@ -1,8 +1,15 @@
 ﻿import axios, { AxiosError } from "axios";
 import { API_BASE_URL, STORAGE_KEYS } from "../config/constants";
 
-export const publicApi = axios.create({ baseURL: API_BASE_URL });
-export const privateApi = axios.create({ baseURL: API_BASE_URL });
+const resolveTimeout = () => {
+  const rawTimeout = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 20000);
+  return Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 20000;
+};
+
+const API_TIMEOUT_MS = resolveTimeout();
+
+export const publicApi = axios.create({ baseURL: API_BASE_URL, timeout: API_TIMEOUT_MS });
+export const privateApi = axios.create({ baseURL: API_BASE_URL, timeout: API_TIMEOUT_MS });
 
 privateApi.interceptors.request.use((config) => {
   const token = localStorage.getItem(STORAGE_KEYS.token);
@@ -48,4 +55,3 @@ export const trendTone = (trend: number) => {
   }
   return "neutral";
 };
-

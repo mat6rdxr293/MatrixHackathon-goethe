@@ -93,6 +93,7 @@ const scheduleGenerateSchema = z.object({
       }),
     )
     .optional(),
+  analysisPreset: z.enum(["balanced", "risk", "comfort"]).optional(),
   weights: plannerWeightsSchema.optional(),
 });
 

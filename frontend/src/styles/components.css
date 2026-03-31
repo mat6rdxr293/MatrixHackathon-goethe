@@ -451,6 +451,14 @@ select:focus {
   gap: 0.65rem;
 }
 
+.mentor-tabs {
+  margin-bottom: 0.1rem;
+}
+
+.mentor-tabs .chip-button {
+  font-weight: 700;
+}
+
 .chat-toolbar {
   display: flex;
   justify-content: space-between;

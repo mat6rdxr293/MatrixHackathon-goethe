@@ -25,6 +25,37 @@ const aiChatSchema = zod_1.z.object({
     }))
         .max(20)
         .optional(),
+    context: zod_1.z
+        .object({
+        mentorSummary: zod_1.z.string().trim().max(3000).optional(),
+        predictionsSummary: zod_1.z.string().trim().max(3000).optional(),
+        recommendationHints: zod_1.z.array(zod_1.z.string().trim().min(1).max(300)).max(8).optional(),
+        analytics: zod_1.z
+            .object({
+            strengths: zod_1.z.array(zod_1.z.string().trim().min(1).max(160)).max(10).optional(),
+            weaknesses: zod_1.z.array(zod_1.z.string().trim().min(1).max(160)).max(10).optional(),
+            recommendations: zod_1.z.array(zod_1.z.string().trim().min(1).max(320)).max(10).optional(),
+            trends: zod_1.z
+                .array(zod_1.z.object({
+                subject: zod_1.z.string().trim().min(1).max(120),
+                trend: zod_1.z.number(),
+            }))
+                .max(12)
+                .optional(),
+            prediction: zod_1.z
+                .object({
+                overallRisk: zod_1.z.number().min(0).max(100).optional(),
+                topRiskMessage: zod_1.z.string().trim().max(400).optional(),
+                flags: zod_1.z.array(zod_1.z.string().trim().min(1).max(200)).max(8).optional(),
+                nextActions: zod_1.z.array(zod_1.z.string().trim().min(1).max(300)).max(8).optional(),
+            })
+                .optional(),
+            teacherTopRisks: zod_1.z.array(zod_1.z.string().trim().min(1).max(240)).max(8).optional(),
+            adminTopRiskClasses: zod_1.z.array(zod_1.z.string().trim().min(1).max(240)).max(8).optional(),
+        })
+            .optional(),
+    })
+        .optional(),
 });
 const achievementSubmitSchema = zod_1.z.object({
     studentId: zod_1.z.string().trim().min(1).optional(),
@@ -197,13 +228,50 @@ exports.portalRoutes.post("/ai-chat", async (req, res) => {
         res.status(400).json({ message: "Неверные данные запроса", errors: parsed.error.flatten() });
         return;
     }
-    const { message, history } = parsed.data;
-    const [mentorData, predictions] = await Promise.all([
-        analyticsService_1.analyticsService.getAiMentor(req.user),
-        predictionService_1.predictionService.getPredictionsByRole(req.user),
-    ]);
-    const mentorSummary = mentorData.summary;
-    const predictionsSummary = summarizePredictions(predictions);
+    const { message, history, context } = parsed.data;
+    let mentorSummary = context?.mentorSummary;
+    let predictionsSummary = context?.predictionsSummary;
+    let recommendationHints = context?.recommendationHints;
+    let analyticsContext = context?.analytics;
+    if (!mentorSummary || !recommendationHints || recommendationHints.length === 0 || !analyticsContext) {
+        const mentorData = await analyticsService_1.analyticsService.getAiMentor(req.user);
+        mentorSummary = mentorSummary ?? mentorData.summary;
+        recommendationHints = recommendationHints?.length ? recommendationHints : mentorData.recommendations?.slice(0, 3);
+        analyticsContext = analyticsContext ?? {
+            strengths: mentorData.strengths ?? [],
+            weaknesses: mentorData.weaknesses ?? [],
+            recommendations: mentorData.recommendations ?? [],
+            trends: mentorData.trends ?? [],
+        };
+    }
+    if (!predictionsSummary || !analyticsContext?.prediction) {
+        const predictions = await predictionService_1.predictionService.getPredictionsByRole(req.user);
+        predictionsSummary = predictionsSummary ?? summarizePredictions(predictions);
+        if (!analyticsContext?.prediction) {
+            const nextContext = { ...(analyticsContext ?? {}) };
+            if (predictions.role === "student" || predictions.role === "parent") {
+                if (predictions.prediction) {
+                    nextContext.prediction = {
+                        overallRisk: predictions.prediction.overallRisk,
+                        topRiskMessage: predictions.prediction.topRiskMessage,
+                        flags: predictions.prediction.flags,
+                        nextActions: predictions.prediction.nextActions,
+                    };
+                }
+            }
+            else if (predictions.role === "teacher") {
+                nextContext.teacherTopRisks = predictions.students
+                    .slice(0, 5)
+                    .map((item) => `${item.fullName} (${item.classId}) — ${item.probability}%`);
+            }
+            else {
+                nextContext.adminTopRiskClasses = (predictions.classRadar ?? [])
+                    .slice(0, 5)
+                    .map((item) => `${item.classId}: ${item.averageRisk}% (${item.highRiskStudents}/${item.totalStudents})`);
+            }
+            analyticsContext = nextContext;
+        }
+    }
     try {
         const aiReply = await openAiMentorService_1.openAiMentorService.generateChatReply({
             role: req.user.role,
@@ -213,12 +281,14 @@ exports.portalRoutes.post("/ai-chat", async (req, res) => {
             context: {
                 mentorSummary,
                 predictionsSummary,
-                recommendationHints: mentorData.recommendations?.slice(0, 3),
+                recommendationHints,
+                analytics: analyticsContext,
             },
         });
         res.json({
-            reply: aiReply,
-            source: openAiMentorService_1.openAiMentorService.isEnabled() ? "openai" : "fallback",
+            reply: aiReply.reply,
+            source: aiReply.mode,
+            mode: aiReply.mode,
         });
     }
     catch (error) {

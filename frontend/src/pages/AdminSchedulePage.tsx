@@ -222,11 +222,14 @@ export function AdminSchedulePage() {
           ]
         : [];
 
+    const mappedAnalysisPreset = analysisPreset === "development" ? "comfort" : analysisPreset;
+
     return {
       days: [1, 2, 3, 4, 5],
       slotsPerDay,
       lessonRequirements,
       streams,
+      analysisPreset: mappedAnalysisPreset,
       weights: plannerWeights,
     };
   };

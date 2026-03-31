@@ -1,12 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.analyticsService = void 0;
+const studentRisk_1 = require("../analytics/risk/studentRisk");
+const summaries_1 = require("../analytics/summaries");
 const academicStoreService_1 = require("./academicStoreService");
 const bilimClassService_1 = require("./bilimClassService");
-const openAiMentorService_1 = require("./openAiMentorService");
+const llmSummaryService_1 = require("./llm/llmSummaryService");
 const storageService_1 = require("./storageService");
 const listProfiles = async () => bilimClassService_1.bilimClassService.getStudentProfiles();
 const listAchievements = () => academicStoreService_1.academicStoreService.listAchievements();
+const users = () => storageService_1.storageService.getUsers();
+const events = () => storageService_1.storageService.listEvents();
 const adminQuickLinks = () => [
     { id: "q-1", title: "Добавить публикацию", href: "/admin/content" },
     { id: "q-2", title: "Собрать расписание", href: "/admin/schedule" },
@@ -39,37 +43,6 @@ const calculatePeriodDelta = (profile) => {
     const avg = deltas.reduce((sum, value) => sum + value, 0) / deltas.length;
     return Number(avg.toFixed(2));
 };
-const buildAiSummary = (profile) => {
-    const strengths = profile.progress
-        .filter((item) => item.current >= 4.5)
-        .map((item) => item.subject);
-    const weaknesses = profile.progress
-        .filter((item) => item.risk)
-        .map((item) => item.subject);
-    return {
-        summary: `${profile.fullName} держит средний балл ${profile.averageScore.toFixed(1)} и может заметно усилить результат.`,
-        strengths,
-        weaknesses,
-        recommendations: [
-            "Проведи на этой неделе 3 короткие дополнительные сессии по предметам риска.",
-            "Чередуй слабый предмет с тем, где у тебя сильный результат.",
-            "В конце недели проверь динамику вместе с помощником ИИ.",
-        ],
-        trends: profile.progress.map((item) => ({
-            subject: item.subject,
-            trend: item.trend,
-        })),
-    };
-};
-const buildClassAiSummary = (classes) => {
-    if (classes.length === 0) {
-        return "Пока нет закрепленных классов. Добавьте класс, чтобы получить ИИ-разбор.";
-    }
-    const topClass = [...classes].sort((a, b) => b.averageScore - a.averageScore)[0];
-    const risky = classes.reduce((sum, item) => sum + item.riskStudents.length, 0);
-    return `Сейчас под вашей ответственностью ${classes.length} классов. Лучшая динамика у ${topClass.classId}, учеников в зоне внимания: ${risky}.`;
-};
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const withAchievementVerification = (profiles, achievements) => {
     const teacherById = new Map(users().filter((user) => user.role === "teacher").map((user) => [user.id, user.name]));
     const teacherByClass = new Map(storageService_1.storageService
@@ -113,81 +86,17 @@ const withAchievementVerification = (profiles, achievements) => {
         };
     });
 };
-const buildTeacherEfficiency = (classes) => {
-    const riskStudents = classes.reduce((sum, item) => sum + item.riskStudents.length, 0);
-    const weeklyHoursSaved = Math.max(1, Math.round(classes.length * 1.8 + riskStudents * 0.35));
-    const automatedActions = Math.max(1, Math.round(classes.length * 2 + riskStudents * 0.6));
-    const recommendedActions = Math.max(1, riskStudents);
-    const focusClasses = [...classes]
-        .sort((a, b) => b.riskStudents.length - a.riskStudents.length ||
-        a.averageScore - b.averageScore ||
-        a.classId.localeCompare(b.classId))
-        .slice(0, 3)
-        .map((item) => item.classId);
-    return {
-        weeklyHoursSaved,
-        automatedActions,
-        recommendedActions,
-        focusClasses,
-    };
-};
-const buildParentWeeklySummary = (profile, recommendations) => {
-    const delta = calculatePeriodDelta(profile);
-    const wins = profile.progress
-        .filter((item) => item.trend > 0)
-        .sort((a, b) => b.trend - a.trend)
-        .slice(0, 3)
-        .map((item) => `${item.subject} +${item.trend.toFixed(1)}`);
-    const risks = [
-        ...new Set([
-            ...profile.weakSubjects,
-            ...profile.progress.filter((item) => item.trend < 0).map((item) => item.subject),
-        ]),
-    ].slice(0, 3);
-    return {
-        periodLabel: "week",
-        delta: Number(delta.toFixed(2)),
-        wins,
-        risks,
-        plan: recommendations.slice(0, 3),
-    };
-};
-const mapMentorOutput = (role, payload) => {
-    const drivers = [
-        "Гибридный подход: локальный скоринг рисков + LLM для формулировок",
-        ...payload.weaknesses.slice(0, 2).map((item) => `Зона внимания: ${item}`),
-        ...payload.strengths.slice(0, 2).map((item) => `Сильная сторона: ${item}`),
-        ...(payload.trends ?? [])
-            .slice(0, 2)
-            .map((item) => `Динамика: ${item.subject} ${item.trend > 0 ? "+" : ""}${item.trend}`),
-    ];
-    const confidence = clamp(58 + payload.recommendations.length * 6 + (payload.trends?.length ?? 0) * 3, 55, 96);
-    const source = role === "teacher"
-        ? "class-aggregates"
-        : role === "admin"
-            ? "school-aggregates"
-            : "student-profile";
-    return {
-        role,
-        summary: payload.summary,
-        strengths: payload.strengths,
-        weaknesses: payload.weaknesses,
-        recommendations: payload.recommendations,
-        trends: payload.trends,
-        explainability: {
-            confidence: Math.round(confidence),
-            drivers,
-            source,
-        },
-    };
-};
 const classOverviewFromManagedClass = (item, profiles) => {
     const classStudents = profiles.filter((student) => student.classId === item.classId);
     const avgScore = classStudents.length > 0
         ? classStudents.reduce((sum, student) => sum + student.averageScore, 0) / classStudents.length
         : 0;
     const riskStudents = classStudents
-        .filter((student) => student.weakSubjects.length > 0 || student.progress.some((subject) => subject.risk))
+        .map((student) => (0, studentRisk_1.calculateStudentRisk)({
+        profile: student,
+        analysisPreset: "risk",
+    }))
+        .filter((student) => student.riskLevel !== "low")
         .map((student) => student.studentId);
     return {
         classId: item.classId,
@@ -222,7 +131,24 @@ const averageScore = (profiles) => {
     }
     return profiles.reduce((sum, student) => sum + student.averageScore, 0) / profiles.length;
 };
-const events = () => storageService_1.storageService.listEvents();
+const buildTeacherEfficiency = (classes) => {
+    const riskStudents = classes.reduce((sum, item) => sum + item.riskStudents.length, 0);
+    const weeklyHoursSaved = Math.max(1, Math.round(classes.length * 1.8 + riskStudents * 0.35));
+    const automatedActions = Math.max(1, Math.round(classes.length * 2 + riskStudents * 0.6));
+    const recommendedActions = Math.max(1, riskStudents);
+    const focusClasses = [...classes]
+        .sort((a, b) => b.riskStudents.length - a.riskStudents.length ||
+        a.averageScore - b.averageScore ||
+        a.classId.localeCompare(b.classId))
+        .slice(0, 3)
+        .map((item) => item.classId);
+    return {
+        weeklyHoursSaved,
+        automatedActions,
+        recommendedActions,
+        focusClasses,
+    };
+};
 const eventsForUser = (user, profiles) => events().filter((item) => {
     const targetRoles = item.targetRoles ?? [];
     const targetClasses = item.targetClassIds ?? [];
@@ -234,16 +160,27 @@ const eventsForUser = (user, profiles) => events().filter((item) => {
         (typeof linkedClassId === "string" && targetClasses.includes(linkedClassId));
     return roleAllowed && classAllowed;
 });
-const users = () => storageService_1.storageService.getUsers();
 const buildSchoolHighlights = (profiles, achievementsCount, feedCount) => {
     const classCount = new Set(profiles.map((item) => item.classId)).size;
-    const riskCount = profiles.filter((item) => item.weakSubjects.length > 0).length;
+    const riskCount = profiles
+        .map((profile) => (0, studentRisk_1.calculateStudentRisk)({ profile, analysisPreset: "risk" }))
+        .filter((item) => item.riskLevel !== "low").length;
     return [
         `В аналитике ${profiles.length} учеников из ${classCount} классов`,
         `В цифровом портфолио ${achievementsCount} достижений`,
         `В ленте школы ${feedCount} публикаций, учеников в зоне риска: ${riskCount}`,
     ];
 };
+const mapMentorOutput = (role, payload) => ({
+    role,
+    summary: payload.summary,
+    strengths: payload.strengths,
+    weaknesses: payload.weaknesses,
+    recommendations: payload.recommendations,
+    trends: payload.trends,
+    mode: payload.mode,
+    explainability: payload.explainability,
+});
 exports.analyticsService = {
     async getDashboardByRole(user) {
         const profiles = await listProfiles();
@@ -253,16 +190,17 @@ exports.analyticsService = {
             if (!profile) {
                 return { message: "Профиль ученика не найден" };
             }
-            const quickAi = buildAiSummary(profile);
+            const risk = (0, studentRisk_1.calculateStudentRisk)({ profile, analysisPreset: "balanced" });
+            const performance = (0, studentRisk_1.summarizeStudentPerformance)({ profile, analysisPreset: "balanced" }, risk);
             return {
                 role: user.role,
                 greeting: `С возвращением, ${user.name}`,
                 averageScore: profile.averageScore,
-                periodDelta: calculatePeriodDelta(profile),
-                weakSubjects: profile.weakSubjects,
+                periodDelta: performance.trendValue,
+                weakSubjects: risk.weakestSubjects,
                 achievements: achievements.filter((item) => item.studentId === profile.studentId),
                 events: eventsForUser(user, profiles),
-                aiRecommendation: quickAi.recommendations[0] ?? quickAi.summary,
+                aiRecommendation: risk.recommendationsSeed[0] ?? "Продолжай работать в стабильном учебном темпе.",
                 quickActions: ["Открыть мой прогресс", "Посмотреть разбор ИИ", "Проверить ближайшие события"],
             };
         }
@@ -271,7 +209,8 @@ exports.analyticsService = {
             if (!profile) {
                 return { message: "Профиль ребенка не найден" };
             }
-            const quickAi = buildAiSummary(profile);
+            const risk = (0, studentRisk_1.calculateStudentRisk)({ profile, analysisPreset: "balanced" });
+            const parentSummary = (0, studentRisk_1.buildParentSummaryInput)(risk);
             return {
                 role: user.role,
                 child: profile.fullName,
@@ -283,8 +222,14 @@ exports.analyticsService = {
                 })),
                 achievements: achievements.filter((item) => item.studentId === profile.studentId),
                 events: eventsForUser(user, profiles),
-                aiSummary: quickAi.summary,
-                weeklySummary: buildParentWeeklySummary(profile, quickAi.recommendations),
+                aiSummary: `${profile.fullName}: уровень риска ${risk.riskLevel}, score ${risk.riskScore}/100.`,
+                weeklySummary: {
+                    periodLabel: "week",
+                    delta: calculatePeriodDelta(profile),
+                    wins: parentSummary.wins,
+                    risks: parentSummary.risks,
+                    plan: parentSummary.weeklyPlan,
+                },
             };
         }
         if (user.role === "teacher") {
@@ -294,6 +239,13 @@ exports.analyticsService = {
             for (const riskStudent of classes.flatMap((item) => item.riskStudents)) {
                 riskStudentMap.set(riskStudent.studentId, riskStudent);
             }
+            const classAnalytics = classes.map((item) => {
+                const students = profiles
+                    .filter((profile) => profile.classId === item.classId)
+                    .map((profile) => (0, studentRisk_1.calculateStudentRisk)({ profile, analysisPreset: "risk" }));
+                return (0, studentRisk_1.buildTeacherClassSummaryInput)(item.classId, students);
+            });
+            const topClass = [...classAnalytics].sort((a, b) => b.highRiskStudents - a.highRiskStudents)[0];
             return {
                 role: user.role,
                 classes,
@@ -304,7 +256,9 @@ exports.analyticsService = {
                 riskStudents: [...riskStudentMap.values()],
                 studentAchievements: achievements,
                 events: eventsForUser(user, profiles),
-                aiSummary: buildClassAiSummary(classes),
+                aiSummary: topClass
+                    ? `Главная зона внимания: ${topClass.classId} (${topClass.highRiskStudents} учеников в high risk).`
+                    : "Критичных зон внимания по классам не обнаружено.",
                 teacherEfficiency,
             };
         }
@@ -374,42 +328,145 @@ exports.analyticsService = {
     async getAiMentor(user) {
         const profiles = await listProfiles();
         if (user.role === "teacher") {
-            const classes = classSummaries(user.id, profiles);
-            const aiResponse = await openAiMentorService_1.openAiMentorService.generateMentorResponse({
+            const teacherClasses = storageService_1.storageService
+                .listClasses()
+                .filter((item) => item.teacherId === user.id)
+                .map((item) => item.classId);
+            const teacherStudents = profiles.filter((profile) => teacherClasses.includes(profile.classId));
+            const teacherRisk = teacherStudents.map((profile) => (0, studentRisk_1.calculateStudentRisk)({
+                profile,
+                analysisPreset: "risk",
+            }));
+            const classSummariesInput = teacherClasses.map((classId) => (0, studentRisk_1.buildTeacherClassSummaryInput)(classId, teacherRisk.filter((item) => item.classId === classId)));
+            const fallbackSummary = classSummariesInput.length > 0
+                ? `Под контролем ${classSummariesInput.length} классов. Требуют внимания: ${classSummariesInput
+                    .sort((a, b) => b.highRiskStudents - a.highRiskStudents)
+                    .slice(0, 2)
+                    .map((item) => `${item.classId} (${item.highRiskStudents})`)
+                    .join(", ")}.`
+                : "Нет закрепленных классов для аналитики.";
+            const fallbackRecommendations = classSummariesInput
+                .flatMap((item) => item.recommendationsSeed)
+                .filter((value, index, array) => array.indexOf(value) === index)
+                .slice(0, 4);
+            const llmSummary = await (0, llmSummaryService_1.generateLLMSummaryFromStructuredData)({
                 role: user.role,
-                userName: user.name,
-                classStats: classes.map((item) => ({
-                    classId: item.classId,
-                    averageScore: item.averageScore,
-                    riskStudents: item.riskStudents.length,
-                })),
+                kind: "teacher-class-report",
+                structuredData: {
+                    teacherName: user.name,
+                    classes: classSummariesInput,
+                    highRiskStudents: teacherRisk.filter((item) => item.riskLevel === "high").length,
+                },
+                fallbackSummary,
+                fallbackRecommendations: fallbackRecommendations.length > 0
+                    ? fallbackRecommendations
+                    : [
+                        "Проверить 2-3 ключевых причины риска по каждому классу.",
+                        "Согласовать недельный план с учениками в high risk.",
+                    ],
             });
-            return mapMentorOutput(user.role, aiResponse);
+            return mapMentorOutput(user.role, {
+                summary: llmSummary.summary,
+                strengths: classSummariesInput
+                    .filter((item) => item.highRiskStudents === 0)
+                    .slice(0, 3)
+                    .map((item) => item.classId),
+                weaknesses: classSummariesInput
+                    .filter((item) => item.highRiskStudents > 0)
+                    .sort((a, b) => b.highRiskStudents - a.highRiskStudents)
+                    .slice(0, 3)
+                    .map((item) => `${item.classId}: ${item.highRiskStudents}`),
+                recommendations: llmSummary.recommendations,
+                mode: llmSummary.source,
+                trends: classSummariesInput.map((item) => ({
+                    subject: item.classId,
+                    trend: Number((4 - item.averageScore).toFixed(2)),
+                })),
+                explainability: (0, summaries_1.buildExplainabilityDrivers)(user.role, teacherRisk),
+            });
         }
         if (user.role === "admin") {
-            const schoolAverage = averageScore(profiles);
-            const riskStudents = profiles.filter((student) => student.weakSubjects.length > 0).length;
-            const aiResponse = await openAiMentorService_1.openAiMentorService.generateMentorResponse({
+            const schoolRisk = profiles.map((profile) => (0, studentRisk_1.calculateStudentRisk)({
+                profile,
+                analysisPreset: "risk",
+            }));
+            const schoolAggregate = (0, summaries_1.aggregateSchoolRisk)(schoolRisk);
+            const fallbackSummary = `По школе средний риск ${schoolAggregate.schoolRiskAverage}/100. ` +
+                `Классов в аналитике: ${schoolAggregate.classes}, учеников в high risk: ${schoolAggregate.highRiskStudents}.`;
+            const llmSummary = await (0, llmSummaryService_1.generateLLMSummaryFromStructuredData)({
                 role: user.role,
-                userName: user.name,
-                schoolStats: {
-                    schoolAverage: +schoolAverage.toFixed(2),
-                    classCount: classOverviews(profiles).length,
-                    riskStudents,
+                kind: "admin-school-summary",
+                structuredData: {
+                    schoolAggregate,
+                    topRiskClasses: schoolAggregate.classBreakdown.slice(0, 4),
                 },
+                fallbackSummary,
+                fallbackRecommendations: [
+                    "Сконцентрировать поддержку на классах с наибольшим средним риском.",
+                    "Ввести еженедельный контроль динамики high-risk учеников.",
+                    "Проверить, как распределены риски по ключевым предметам и параллелям.",
+                ],
             });
-            return mapMentorOutput(user.role, aiResponse);
+            return mapMentorOutput(user.role, {
+                summary: llmSummary.summary,
+                strengths: schoolAggregate.classBreakdown
+                    .slice(-3)
+                    .map((item) => `${item.classId}: ${item.averageRisk}/100`),
+                weaknesses: schoolAggregate.classBreakdown
+                    .slice(0, 3)
+                    .map((item) => `${item.classId}: ${item.averageRisk}/100`),
+                recommendations: llmSummary.recommendations,
+                mode: llmSummary.source,
+                trends: schoolAggregate.classBreakdown.map((item) => ({
+                    subject: item.classId,
+                    trend: Number((item.averageRisk / 100).toFixed(2)),
+                })),
+                explainability: (0, summaries_1.buildExplainabilityDrivers)(user.role, schoolRisk),
+            });
         }
         const profile = getLinkedStudent(user, profiles);
         if (!profile) {
             throw new Error("Профиль не найден");
         }
-        const aiResponse = await openAiMentorService_1.openAiMentorService.generateMentorResponse({
-            role: user.role,
-            userName: user.name,
-            studentProfile: profile,
+        const risk = (0, studentRisk_1.calculateStudentRisk)({
+            profile,
+            analysisPreset: user.role === "parent" ? "balanced" : "comfort",
         });
-        return mapMentorOutput(user.role, aiResponse);
+        const performance = (0, studentRisk_1.summarizeStudentPerformance)({ profile, analysisPreset: "balanced" }, risk);
+        const fallbackSummary = `${profile.fullName}: риск ${(0, studentRisk_1.getRiskLevelLabel)(risk.riskLevel)} (${risk.riskScore}/100). ` +
+            `Средний балл ${performance.averageScore}, тренд ${performance.trendValue > 0 ? "+" : ""}${performance.trendValue}.`;
+        const llmSummary = await (0, llmSummaryService_1.generateLLMSummaryFromStructuredData)({
+            role: user.role,
+            kind: user.role === "parent" ? "parent-weekly-summary" : "student-mentor",
+            structuredData: {
+                student: {
+                    id: risk.studentId,
+                    name: risk.fullName,
+                    classId: risk.classId,
+                },
+                risk,
+                performance,
+            },
+            fallbackSummary,
+            fallbackRecommendations: risk.recommendationsSeed.length > 0
+                ? risk.recommendationsSeed
+                : ["Выбрать 1-2 предмета для фокуса на неделю и провести мини-проверку прогресса."],
+        });
+        return mapMentorOutput(user.role, {
+            summary: llmSummary.summary,
+            strengths: risk.strongestSubjects,
+            weaknesses: risk.weakestSubjects,
+            recommendations: llmSummary.recommendations,
+            mode: llmSummary.source,
+            trends: profile.progress.map((item) => ({
+                subject: item.subject,
+                trend: Number(item.trend.toFixed(2)),
+            })),
+            explainability: (0, summaries_1.buildExplainabilityDrivers)(user.role, [risk], [
+                `Итоговый риск: ${risk.riskScore}/100`,
+                ...risk.reasons.slice(0, 2),
+            ]),
+        });
     },
     async getEvents(user) {
         const profiles = await listProfiles();
@@ -446,7 +503,9 @@ exports.analyticsService = {
             totalUsers: users().length,
             eventsCount: events().length,
             achievementsCount: achievements.length,
-            riskStudents: profiles.filter((student) => student.weakSubjects.length > 0).length,
+            riskStudents: profiles
+                .map((profile) => (0, studentRisk_1.calculateStudentRisk)({ profile, analysisPreset: "risk" }))
+                .filter((item) => item.riskLevel !== "low").length,
         };
     },
     async getClassManagement() {

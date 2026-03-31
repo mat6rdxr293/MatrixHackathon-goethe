@@ -85,6 +85,7 @@ const scheduleGenerateSchema = zod_1.z.object({
         slot: zod_1.z.number().int().min(1).max(12),
     }))
         .optional(),
+    analysisPreset: zod_1.z.enum(["balanced", "risk", "comfort"]).optional(),
     weights: plannerWeightsSchema.optional(),
 });
 const teacherAbsenceSchema = zod_1.z.object({

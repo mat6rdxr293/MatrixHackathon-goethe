@@ -27,6 +27,39 @@ const aiChatSchema = z.object({
     )
     .max(20)
     .optional(),
+  context: z
+    .object({
+      mentorSummary: z.string().trim().max(3000).optional(),
+      predictionsSummary: z.string().trim().max(3000).optional(),
+      recommendationHints: z.array(z.string().trim().min(1).max(300)).max(8).optional(),
+      analytics: z
+        .object({
+          strengths: z.array(z.string().trim().min(1).max(160)).max(10).optional(),
+          weaknesses: z.array(z.string().trim().min(1).max(160)).max(10).optional(),
+          recommendations: z.array(z.string().trim().min(1).max(320)).max(10).optional(),
+          trends: z
+            .array(
+              z.object({
+                subject: z.string().trim().min(1).max(120),
+                trend: z.number(),
+              }),
+            )
+            .max(12)
+            .optional(),
+          prediction: z
+            .object({
+              overallRisk: z.number().min(0).max(100).optional(),
+              topRiskMessage: z.string().trim().max(400).optional(),
+              flags: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
+              nextActions: z.array(z.string().trim().min(1).max(300)).max(8).optional(),
+            })
+            .optional(),
+          teacherTopRisks: z.array(z.string().trim().min(1).max(240)).max(8).optional(),
+          adminTopRiskClasses: z.array(z.string().trim().min(1).max(240)).max(8).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 const achievementSubmitSchema = z.object({
@@ -216,14 +249,51 @@ portalRoutes.post("/ai-chat", async (req, res) => {
     return;
   }
 
-  const { message, history } = parsed.data;
-  const [mentorData, predictions] = await Promise.all([
-    analyticsService.getAiMentor(req.user),
-    predictionService.getPredictionsByRole(req.user),
-  ]);
+  const { message, history, context } = parsed.data;
+  let mentorSummary = context?.mentorSummary;
+  let predictionsSummary = context?.predictionsSummary;
+  let recommendationHints = context?.recommendationHints;
+  let analyticsContext = context?.analytics;
 
-  const mentorSummary = mentorData.summary;
-  const predictionsSummary = summarizePredictions(predictions);
+  if (!mentorSummary || !recommendationHints || recommendationHints.length === 0 || !analyticsContext) {
+    const mentorData = await analyticsService.getAiMentor(req.user);
+    mentorSummary = mentorSummary ?? mentorData.summary;
+    recommendationHints = recommendationHints?.length ? recommendationHints : mentorData.recommendations?.slice(0, 3);
+    analyticsContext = analyticsContext ?? {
+      strengths: mentorData.strengths ?? [],
+      weaknesses: mentorData.weaknesses ?? [],
+      recommendations: mentorData.recommendations ?? [],
+      trends: mentorData.trends ?? [],
+    };
+  }
+
+  if (!predictionsSummary || !analyticsContext?.prediction) {
+    const predictions = await predictionService.getPredictionsByRole(req.user);
+    predictionsSummary = predictionsSummary ?? summarizePredictions(predictions);
+    if (!analyticsContext?.prediction) {
+      const nextContext = { ...(analyticsContext ?? {}) } as NonNullable<typeof analyticsContext>;
+      if (predictions.role === "student" || predictions.role === "parent") {
+        if (predictions.prediction) {
+          nextContext.prediction = {
+            overallRisk: predictions.prediction.overallRisk,
+            topRiskMessage: predictions.prediction.topRiskMessage,
+            flags: predictions.prediction.flags,
+            nextActions: predictions.prediction.nextActions,
+          };
+        }
+      } else if (predictions.role === "teacher") {
+        nextContext.teacherTopRisks = predictions.students
+          .slice(0, 5)
+          .map((item) => `${item.fullName} (${item.classId}) — ${item.probability}%`);
+      } else {
+        nextContext.adminTopRiskClasses = (predictions.classRadar ?? [])
+          .slice(0, 5)
+          .map((item) => `${item.classId}: ${item.averageRisk}% (${item.highRiskStudents}/${item.totalStudents})`);
+      }
+      analyticsContext = nextContext;
+    }
+  }
+
   try {
     const aiReply = await openAiMentorService.generateChatReply({
       role: req.user.role,
@@ -233,13 +303,15 @@ portalRoutes.post("/ai-chat", async (req, res) => {
       context: {
         mentorSummary,
         predictionsSummary,
-        recommendationHints: mentorData.recommendations?.slice(0, 3),
+        recommendationHints,
+        analytics: analyticsContext,
       },
     });
 
     res.json({
-      reply: aiReply,
-      source: openAiMentorService.isEnabled() ? "openai" : "fallback",
+      reply: aiReply.reply,
+      source: aiReply.mode,
+      mode: aiReply.mode,
     });
   } catch (error) {
     const messageText = error instanceof Error ? error.message : "Не удалось получить ответ AI-чата";

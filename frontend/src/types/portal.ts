@@ -185,6 +185,7 @@ export type AiMentorResponse = {
   weakSides?: string[];
   recommendations: string[];
   trends?: { subject: string; trend: number }[];
+  mode?: "openai" | "local" | "demo";
   explainability?: {
     confidence: number;
     drivers: string[];
@@ -367,7 +368,32 @@ export type AiChatMessage = {
 
 export type AiChatResponse = {
   reply: string;
-  source: "openai" | "fallback";
+  source: "openai" | "local" | "demo";
+  mode?: "openai" | "local" | "demo";
+};
+
+export type AiChatRequest = {
+  message: string;
+  history?: AiChatMessage[];
+  context?: {
+    mentorSummary?: string;
+    predictionsSummary?: string;
+    recommendationHints?: string[];
+    analytics?: {
+      strengths?: string[];
+      weaknesses?: string[];
+      recommendations?: string[];
+      trends?: { subject: string; trend: number }[];
+      prediction?: {
+        overallRisk?: number;
+        topRiskMessage?: string;
+        flags?: string[];
+        nextActions?: string[];
+      };
+      teacherTopRisks?: string[];
+      adminTopRiskClasses?: string[];
+    };
+  };
 };
 
 export type AuthContextValue = {

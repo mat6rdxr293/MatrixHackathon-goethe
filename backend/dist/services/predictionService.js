@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.predictionService = void 0;
+const studentRisk_1 = require("../analytics/risk/studentRisk");
+const summaries_1 = require("../analytics/summaries");
 const bilimClassService_1 = require("./bilimClassService");
-const riskEngineService_1 = require("./riskEngineService");
 const storageService_1 = require("./storageService");
 const getLinkedProfile = async (user) => {
     const profiles = await bilimClassService_1.bilimClassService.getStudentProfiles();
@@ -29,16 +30,30 @@ exports.predictionService = {
                     prediction: null,
                 };
             }
-            const prediction = (0, riskEngineService_1.studentPrediction)(linked);
-            const top = prediction.subjects.slice(0, 3);
+            const prediction = (0, studentRisk_1.calculateStudentRisk)({
+                profile: linked,
+                analysisPreset: "risk",
+            });
+            const topInsights = prediction.recommendationContext.subjectInsights.slice(0, 3);
             return {
                 role: user.role,
                 prediction: {
-                    ...prediction,
-                    topRiskMessage: top.length > 0
-                        ? `Вероятность сложности по предмету ${top[0].subject}: ${top[0].probability}%`
-                        : "Риск не обнаружен",
-                    nextActions: top.flatMap((item) => item.resources).slice(0, 3),
+                    studentId: prediction.studentId,
+                    fullName: prediction.fullName,
+                    classId: prediction.classId,
+                    overallRisk: prediction.riskScore,
+                    flags: prediction.reasons,
+                    topRiskMessage: topInsights.length > 0
+                        ? `Риск по предмету "${topInsights[0].subject}" выше остальных: ${Math.round(topInsights[0].riskScore)}%.`
+                        : "Выраженных рисков по предметам не обнаружено.",
+                    nextActions: prediction.recommendationsSeed.slice(0, 3),
+                    subjects: topInsights.map((item) => ({
+                        subject: item.subject,
+                        probability: Math.round(item.riskScore),
+                        reason: prediction.reasonDetails.find((reason) => reason.code === "weak_key_subject" &&
+                            reason.text.toLowerCase().includes(item.subject.toLowerCase()))?.text ?? `Текущий балл: ${item.current.toFixed(1)}, тренд: ${item.trend.toFixed(2)}`,
+                        resources: prediction.recommendationsSeed.slice(0, 3),
+                    })),
                 },
             };
         }
@@ -48,25 +63,37 @@ exports.predictionService = {
                 .filter((item) => item.teacherId === user.id)
                 .map((item) => item.classId);
             const classProfiles = profiles.filter((item) => teacherClasses.includes(item.classId));
-            const predictions = classProfiles.map((item) => (0, riskEngineService_1.studentPrediction)(item));
+            const predictions = classProfiles.map((item) => (0, studentRisk_1.calculateStudentRisk)({
+                profile: item,
+                analysisPreset: "risk",
+            }));
             return {
                 role: user.role,
                 classes: teacherClasses,
                 students: predictions
-                    .sort((a, b) => b.overallRisk - a.overallRisk)
+                    .sort((a, b) => b.riskScore - a.riskScore)
                     .map((item) => ({
                     studentId: item.studentId,
                     fullName: item.fullName,
                     classId: item.classId,
-                    overallRisk: item.overallRisk,
-                    weakSubject: item.subjects[0]?.subject ?? "-",
-                    probability: item.subjects[0]?.probability ?? item.overallRisk,
+                    overallRisk: item.riskScore,
+                    weakSubject: item.weakestSubjects[0] ?? "-",
+                    probability: item.riskScore,
                 })),
             };
         }
+        const schoolAggregate = (0, summaries_1.aggregateSchoolRisk)(profiles.map((profile) => (0, studentRisk_1.calculateStudentRisk)({
+            profile,
+            analysisPreset: "risk",
+        })));
         return {
             role: user.role,
-            classRadar: (0, riskEngineService_1.classRiskRadar)(profiles),
+            classRadar: schoolAggregate.classBreakdown.map((item) => ({
+                classId: item.classId,
+                averageRisk: item.averageRisk,
+                highRiskStudents: item.highRiskStudents,
+                totalStudents: item.students,
+            })),
         };
     },
 };

@@ -1,9 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.studentProfileService = void 0;
+const studentRisk_1 = require("../analytics/risk/studentRisk");
 const academicStoreService_1 = require("./academicStoreService");
 const bilimClassService_1 = require("./bilimClassService");
-const riskEngineService_1 = require("./riskEngineService");
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const byRank = (profiles) => [...profiles]
     .sort((a, b) => b.averageScore - a.averageScore)
@@ -38,9 +38,12 @@ exports.studentProfileService = {
         })))
             .sort((a, b) => +new Date(b.date) - +new Date(a.date))
             .slice(0, 10);
-        const prediction = (0, riskEngineService_1.studentPrediction)(profile);
-        const topSubject = prediction.subjects[0];
-        const attendancePercent = clamp(Math.round(99 - prediction.overallRisk / 9 - profile.weakSubjects.length * 2), 82, 99);
+        const risk = (0, studentRisk_1.calculateStudentRisk)({
+            profile,
+            analysisPreset: "balanced",
+        });
+        const topSubject = risk.recommendationContext.subjectInsights[0];
+        const attendancePercent = clamp(Math.round(99 - risk.riskScore / 9 - risk.weakestSubjects.length * 2), 82, 99);
         const streakDays = clamp(Math.round(profile.averageScore * 3 + 2), 4, 30);
         return {
             student: profile,
@@ -51,15 +54,15 @@ exports.studentProfileService = {
             recentGrades,
             achievements,
             ai: {
-                summary: prediction.flags[0] ??
+                summary: risk.reasons[0] ??
                     `${profile.fullName} держит устойчивую динамику и может усилить результат точечной практикой.`,
-                riskLabel: topSubject && topSubject.probability >= 70
-                    ? `Высокий риск по предмету ${topSubject.subject}: ${topSubject.probability}%`
+                riskLabel: topSubject && topSubject.riskScore >= 70
+                    ? `Высокий риск по предмету ${topSubject.subject}: ${Math.round(topSubject.riskScore)}%`
                     : "Риск под контролем",
-                action: topSubject?.resources[0] ??
+                action: risk.recommendationsSeed[0] ??
                     "Сделать короткий недельный план по слабым темам и сверить прогресс через 7 дней.",
-                opportunity: prediction.subjects.at(-1)?.subject
-                    ? `Сильная зона: ${prediction.subjects.at(-1)?.subject}. Можно усиливать олимпиадное направление.`
+                opportunity: risk.strongestSubjects[0]
+                    ? `Сильная зона: ${risk.strongestSubjects[0]}. Можно усиливать олимпиадное направление.`
                     : "Есть потенциал роста по профильным предметам.",
             },
         };

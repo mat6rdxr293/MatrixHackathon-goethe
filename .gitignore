@@ -1,0 +1,10 @@
+# Local LLM artifacts
+/local_llm/.venv/
+/local_llm/models/
+/local_llm/model_info.json
+/local_llm/.env.local
+
+# Common local build/runtime artifacts
+**/node_modules/
+**/dist/
+*.log

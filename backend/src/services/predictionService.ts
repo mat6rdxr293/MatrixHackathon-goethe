@@ -1,6 +1,7 @@
 ﻿import { User } from "../types";
+import { calculateStudentRisk } from "../analytics/risk/studentRisk";
+import { aggregateSchoolRisk } from "../analytics/summaries";
 import { bilimClassService } from "./bilimClassService";
-import { classRiskRadar, studentPrediction } from "./riskEngineService";
 import { storageService } from "./storageService";
 
 type SafeUser = Omit<User, "password">;
@@ -33,18 +34,36 @@ export const predictionService = {
         };
       }
 
-      const prediction = studentPrediction(linked);
-      const top = prediction.subjects.slice(0, 3);
+      const prediction = calculateStudentRisk({
+        profile: linked,
+        analysisPreset: "risk",
+      });
+      const topInsights = prediction.recommendationContext.subjectInsights.slice(0, 3);
 
       return {
         role: user.role,
         prediction: {
-          ...prediction,
+          studentId: prediction.studentId,
+          fullName: prediction.fullName,
+          classId: prediction.classId,
+          overallRisk: prediction.riskScore,
+          flags: prediction.reasons,
           topRiskMessage:
-            top.length > 0
-              ? `Вероятность сложности по предмету ${top[0].subject}: ${top[0].probability}%`
-              : "Риск не обнаружен",
-          nextActions: top.flatMap((item) => item.resources).slice(0, 3),
+            topInsights.length > 0
+              ? `Риск по предмету "${topInsights[0].subject}" выше остальных: ${Math.round(topInsights[0].riskScore)}%.`
+              : "Выраженных рисков по предметам не обнаружено.",
+          nextActions: prediction.recommendationsSeed.slice(0, 3),
+          subjects: topInsights.map((item) => ({
+            subject: item.subject,
+            probability: Math.round(item.riskScore),
+            reason:
+              prediction.reasonDetails.find(
+                (reason) =>
+                  reason.code === "weak_key_subject" &&
+                  reason.text.toLowerCase().includes(item.subject.toLowerCase()),
+              )?.text ?? `Текущий балл: ${item.current.toFixed(1)}, тренд: ${item.trend.toFixed(2)}`,
+            resources: prediction.recommendationsSeed.slice(0, 3),
+          })),
         },
       };
     }
@@ -56,27 +75,47 @@ export const predictionService = {
         .map((item) => item.classId);
 
       const classProfiles = profiles.filter((item) => teacherClasses.includes(item.classId));
-      const predictions = classProfiles.map((item) => studentPrediction(item));
+      const predictions = classProfiles.map((item) =>
+        calculateStudentRisk({
+          profile: item,
+          analysisPreset: "risk",
+        }),
+      );
 
       return {
         role: user.role,
         classes: teacherClasses,
         students: predictions
-          .sort((a, b) => b.overallRisk - a.overallRisk)
+          .sort((a, b) => b.riskScore - a.riskScore)
           .map((item) => ({
             studentId: item.studentId,
             fullName: item.fullName,
             classId: item.classId,
-            overallRisk: item.overallRisk,
-            weakSubject: item.subjects[0]?.subject ?? "-",
-            probability: item.subjects[0]?.probability ?? item.overallRisk,
+            overallRisk: item.riskScore,
+            weakSubject: item.weakestSubjects[0] ?? "-",
+            probability: item.riskScore,
           })),
       };
     }
 
+    const schoolAggregate = aggregateSchoolRisk(
+      profiles.map((profile) =>
+        calculateStudentRisk({
+          profile,
+          analysisPreset: "risk",
+        }),
+      ),
+    );
+
     return {
       role: user.role,
-      classRadar: classRiskRadar(profiles),
+      classRadar: schoolAggregate.classBreakdown.map((item) => ({
+        classId: item.classId,
+        averageRisk: item.averageRisk,
+        highRiskStudents: item.highRiskStudents,
+        totalStudents: item.students,
+      })),
     };
   },
 };
+

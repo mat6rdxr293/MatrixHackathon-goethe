@@ -7,6 +7,8 @@ cd /d "%ROOT%"
 
 set "BACKEND_PORT=777"
 set "FRONTEND_PORT=444"
+set "LOCAL_LLM_PORT=8009"
+set "LOCAL_LLM_URL=http://127.0.0.1:%LOCAL_LLM_PORT%"
 set "CERT_DIR=%ROOT%frontend\.cert"
 set "CERT_FILE="
 set "KEY_FILE="
@@ -34,10 +36,29 @@ if not exist "%ROOT%frontend\package.json" (
   exit /b 1
 )
 
+echo [INFO] Syncing OpenAI key from remote key.txt...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\sync_openai_key.ps1"
+if errorlevel 1 (
+  echo [WARN] OpenAI key sync failed. Continuing with current env values.
+)
+
 echo [INFO] Checking ports 4000, %FRONTEND_PORT% and %BACKEND_PORT%...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports = @(4000, %FRONTEND_PORT%, %BACKEND_PORT%); foreach ($port in $ports) { $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; foreach ($listener in $listeners) { $proc = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue; if ($proc -and $proc.ProcessName -eq 'node') { Stop-Process -Id $proc.Id -Force; Write-Host ('[INFO] Stopped node PID ' + $proc.Id + ' on port ' + $port) } elseif ($proc) { Write-Host ('[ERROR] Port ' + $port + ' is used by ' + $proc.ProcessName + ' (PID ' + $proc.Id + '). Stop it manually and rerun.'); exit 2 } } }"
 if errorlevel 2 (
   exit /b 2
+)
+
+if exist "%ROOT%local_llm\.venv\Scripts\python.exe" (
+  start "Aqbobek Local LLM" cmd /k "cd /d ""%ROOT%local_llm"" && set ""LOCAL_LLM_PORT=%LOCAL_LLM_PORT%"" && set ""LOCAL_LLM_HOST=127.0.0.1"" && call start_local_llm.bat"
+  echo [INFO] Waiting for local LLM on port %LOCAL_LLM_PORT%...
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$ok=$false; for ($i = 0; $i -lt 80; $i++) { try { $r = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%LOCAL_LLM_PORT%/health' -TimeoutSec 2; if ($r.StatusCode -eq 200) { $ok=$true; break } } catch {}; Start-Sleep -Milliseconds 500 }; if (-not $ok) { exit 4 }"
+  if errorlevel 4 (
+    echo [WARN] Local LLM did not respond on port %LOCAL_LLM_PORT%. Backend will continue with demo fallback.
+  ) else (
+    echo [OK] Local LLM is ready on %LOCAL_LLM_URL%.
+  )
+) else (
+  echo [WARN] local_llm virtualenv not found. Run setup_project.bat to enable local LLM fallback.
 )
 
 if not exist "%CERT_DIR%" (
@@ -104,9 +125,9 @@ echo [OK] Frontend build complete.
 echo.
 
 if /I "%HTTPS_MODE%"=="cert-key" (
-  start "Aqbobek Backend PROD" cmd /k "cd /d ""%ROOT%backend"" && set ""NODE_ENV=production"" && set ""ENV_FILE=.env.production"" && set ""PORT=%BACKEND_PORT%"" && set ""BACKEND_HOST=0.0.0.0"" && set ""FRONTEND_PORT=%FRONTEND_PORT%"" && set ""CORS_ORIGIN=https://localhost:%FRONTEND_PORT%,https://matrix-host.ru:%FRONTEND_PORT%,https://vite.matrix-host.ru:%FRONTEND_PORT%"" && set ""BACKEND_PROTOCOL=https"" && set ""BACKEND_HTTPS_CERT_PATH=%CERT_FILE%"" && set ""BACKEND_HTTPS_KEY_PATH=%KEY_FILE%"" && npm.cmd run start"
+  start "Aqbobek Backend PROD" cmd /k "cd /d ""%ROOT%backend"" && set ""NODE_ENV=production"" && set ""ENV_FILE=.env.production"" && set ""PORT=%BACKEND_PORT%"" && set ""BACKEND_HOST=0.0.0.0"" && set ""FRONTEND_PORT=%FRONTEND_PORT%"" && set ""CORS_ORIGIN=https://localhost:%FRONTEND_PORT%,https://matrix-host.ru:%FRONTEND_PORT%,https://vite.matrix-host.ru:%FRONTEND_PORT%"" && set ""BACKEND_PROTOCOL=https"" && set ""BACKEND_HTTPS_CERT_PATH=%CERT_FILE%"" && set ""BACKEND_HTTPS_KEY_PATH=%KEY_FILE%"" && set ""LOCAL_LLM_ENABLED=true"" && set ""LOCAL_LLM_URL=%LOCAL_LLM_URL%"" && npm.cmd run start"
 ) else (
-  start "Aqbobek Backend PROD" cmd /k "cd /d ""%ROOT%backend"" && set ""NODE_ENV=production"" && set ""ENV_FILE=.env.production"" && set ""PORT=%BACKEND_PORT%"" && set ""BACKEND_HOST=0.0.0.0"" && set ""FRONTEND_PORT=%FRONTEND_PORT%"" && set ""CORS_ORIGIN=https://localhost:%FRONTEND_PORT%,https://matrix-host.ru:%FRONTEND_PORT%,https://vite.matrix-host.ru:%FRONTEND_PORT%"" && set ""BACKEND_PROTOCOL=https"" && set ""BACKEND_HTTPS_PFX_PATH=%PFX_FILE%"" && set ""BACKEND_HTTPS_PFX_PASS=%CERT_PASS%"" && npm.cmd run start"
+  start "Aqbobek Backend PROD" cmd /k "cd /d ""%ROOT%backend"" && set ""NODE_ENV=production"" && set ""ENV_FILE=.env.production"" && set ""PORT=%BACKEND_PORT%"" && set ""BACKEND_HOST=0.0.0.0"" && set ""FRONTEND_PORT=%FRONTEND_PORT%"" && set ""CORS_ORIGIN=https://localhost:%FRONTEND_PORT%,https://matrix-host.ru:%FRONTEND_PORT%,https://vite.matrix-host.ru:%FRONTEND_PORT%"" && set ""BACKEND_PROTOCOL=https"" && set ""BACKEND_HTTPS_PFX_PATH=%PFX_FILE%"" && set ""BACKEND_HTTPS_PFX_PASS=%CERT_PASS%"" && set ""LOCAL_LLM_ENABLED=true"" && set ""LOCAL_LLM_URL=%LOCAL_LLM_URL%"" && npm.cmd run start"
 )
 
 echo [INFO] Waiting for backend to bind port %BACKEND_PORT%...
@@ -126,6 +147,7 @@ if /I "%HTTPS_MODE%"=="cert-key" (
 echo [OK] Production services started in separate windows.
 echo Frontend: https://localhost:%FRONTEND_PORT%
 echo Backend:  https://localhost:%BACKEND_PORT%
+echo Local LLM: %LOCAL_LLM_URL%
 echo HTTPS source: %HTTPS_MODE%
 if /I "%HTTPS_MODE%"=="cert-key" echo TLS files: %CERT_FILE% ^| %KEY_FILE%
 echo.

@@ -1,7 +1,7 @@
 ﻿import { Achievement, StudentProfile } from "../types";
+import { calculateStudentRisk } from "../analytics/risk/studentRisk";
 import { academicStoreService } from "./academicStoreService";
 import { bilimClassService } from "./bilimClassService";
-import { studentPrediction } from "./riskEngineService";
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -48,11 +48,15 @@ export const studentProfileService = {
       .sort((a, b) => +new Date(b.date) - +new Date(a.date))
       .slice(0, 10);
 
-    const prediction = studentPrediction(profile);
-    const topSubject = prediction.subjects[0];
+    const risk = calculateStudentRisk({
+      profile,
+      analysisPreset: "balanced",
+    });
+
+    const topSubject = risk.recommendationContext.subjectInsights[0];
 
     const attendancePercent = clamp(
-      Math.round(99 - prediction.overallRisk / 9 - profile.weakSubjects.length * 2),
+      Math.round(99 - risk.riskScore / 9 - risk.weakestSubjects.length * 2),
       82,
       99,
     );
@@ -68,21 +72,20 @@ export const studentProfileService = {
       achievements,
       ai: {
         summary:
-          prediction.flags[0] ??
+          risk.reasons[0] ??
           `${profile.fullName} держит устойчивую динамику и может усилить результат точечной практикой.`,
         riskLabel:
-          topSubject && topSubject.probability >= 70
-            ? `Высокий риск по предмету ${topSubject.subject}: ${topSubject.probability}%`
+          topSubject && topSubject.riskScore >= 70
+            ? `Высокий риск по предмету ${topSubject.subject}: ${Math.round(topSubject.riskScore)}%`
             : "Риск под контролем",
         action:
-          topSubject?.resources[0] ??
+          risk.recommendationsSeed[0] ??
           "Сделать короткий недельный план по слабым темам и сверить прогресс через 7 дней.",
         opportunity:
-          prediction.subjects.at(-1)?.subject
-            ? `Сильная зона: ${prediction.subjects.at(-1)?.subject}. Можно усиливать олимпиадное направление.`
+          risk.strongestSubjects[0]
+            ? `Сильная зона: ${risk.strongestSubjects[0]}. Можно усиливать олимпиадное направление.`
             : "Есть потенциал роста по профильным предметам.",
       },
     };
   },
 };
-
