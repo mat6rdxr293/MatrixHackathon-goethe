@@ -204,6 +204,87 @@ const fallbackMentorResponse = (input) => {
         trends: [],
     };
 };
+const fallbackClassReport = (input) => {
+    const highRiskShare = input.summary.students > 0 ? (input.summary.highRisk / input.summary.students) * 100 : 0;
+    const riskLevel = highRiskShare >= 45 ? "высокий" : highRiskShare >= 25 ? "повышенный" : highRiskShare >= 10 ? "умеренный" : "низкий";
+    const topRisksText = input.topRisks.length > 0
+        ? input.topRisks
+            .slice(0, 4)
+            .map((item, index) => `${index + 1}) ${item.student} — ${item.subject} (${item.probability}%)`)
+            .join("\n")
+        : "Критичные риски по предметам не выявлены.";
+    return [
+        `Алгоритмический отчет по классу ${input.classId}`,
+        `Классный руководитель: ${input.teacherName}`,
+        `Учеников: ${input.summary.students}`,
+        `Средний балл: ${input.summary.averageScore.toFixed(2)}`,
+        `Ученики с высоким риском: ${input.summary.highRisk} (${highRiskShare.toFixed(1)}%), уровень риска: ${riskLevel}.`,
+        "",
+        "Ключевые зоны внимания:",
+        topRisksText,
+        "",
+        "Рекомендации:",
+        "1) Разделить учеников риска на мини-группы по слабым предметам.",
+        "2) Дать короткие проверочные задания через 3-4 дня после коррекции.",
+        "3) Еженедельно пересчитывать риск и обновлять план поддержки.",
+    ].join("\n");
+};
+const fallbackChatReply = (input) => {
+    const question = input.message.toLowerCase();
+    const questionFlat = question.replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+    const mentorSummary = input.context?.mentorSummary?.trim();
+    const predictionsSummary = input.context?.predictionsSummary?.trim();
+    const tips = input.context?.recommendationHints?.filter(Boolean) ?? [];
+    const isGreeting = questionFlat.includes("привет") ||
+        questionFlat.includes("здрав") ||
+        questionFlat.includes("салам") ||
+        questionFlat === "hello" ||
+        questionFlat === "hi";
+    const isIdentityQuestion = questionFlat.includes("ты ии") ||
+        questionFlat.includes("кто ты") ||
+        questionFlat.includes("ты кто");
+    const isRiskQuestion = questionFlat.includes("риск") ||
+        questionFlat.includes("проблем") ||
+        questionFlat.includes("сложност");
+    const isPlanQuestion = questionFlat.includes("план") ||
+        questionFlat.includes("7 дней") ||
+        questionFlat.includes("недел");
+    const isDiscussQuestion = questionFlat.includes("обсуд") ||
+        questionFlat.includes("учител") ||
+        questionFlat.includes("родител");
+    if (isGreeting) {
+        return "Привет. Я ИИ-помощник портала: могу подсказать риски, дать план на 7 дней и подготовить темы для разговора с учителем или родителем.";
+    }
+    if (isIdentityQuestion) {
+        return "Да, я ИИ-помощник. Работаю в гибридном режиме: локальные алгоритмы риска + AI-формулировки рекомендаций.";
+    }
+    if (isDiscussQuestion) {
+        const discussionBase = predictionsSummary
+            ? `Ключевая тема: ${predictionsSummary}.`
+            : "Ключевая тема: текущие предметы с просадкой и динамика за неделю.";
+        const extra = tips.length > 0 ? `Что попросить: ${tips[0]}.` : "Что попросить: короткий план коррекции на ближайшие 7 дней.";
+        return `${discussionBase} ${extra}`;
+    }
+    if (isRiskQuestion) {
+        return [
+            predictionsSummary ? `По расчетам риска: ${predictionsSummary}.` : "По текущим расчетам есть зоны, которые требуют внимания.",
+            tips.length > 0 ? `Первый шаг: ${tips[0]}.` : "Первый шаг: зафиксируйте 1-2 приоритетные темы и проверьте прогресс через неделю.",
+        ].join(" ");
+    }
+    if (isPlanQuestion || questionFlat.includes("что делать")) {
+        const plan = tips.length > 0
+            ? tips
+                .slice(0, 3)
+                .map((item, index) => `${index + 1}) ${item}`)
+                .join(" ")
+            : "1) 20-30 минут на приоритетный предмет в день. 2) Мини-проверка в середине недели. 3) Повторный замер в конце недели.";
+        return `План на 7 дней: ${plan}`;
+    }
+    if (mentorSummary) {
+        return `${mentorSummary} Если хочешь, разложу это в конкретный план на 7 дней.`;
+    }
+    return "Могу помочь по трём сценариям: 1) где самый высокий риск, 2) план на 7 дней, 3) что обсудить с учителем/родителем.";
+};
 const requestResponsesText = async (config, payload) => {
     let responseData;
     try {
@@ -299,54 +380,66 @@ exports.openAiMentorService = {
         }
     },
     async generateClassReport(input) {
-        const config = ensureConfigured();
-        return requestResponsesText(config, {
-            instructions: "Write a concise and practical class performance report in simple Russian. Output plain text only.",
-            input: [
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "input_text",
-                            text: `Create report using this input: ${JSON.stringify(input)}`,
-                        },
-                    ],
-                },
-            ],
-            max_output_tokens: 700,
-        });
+        try {
+            const config = ensureConfigured();
+            return await requestResponsesText(config, {
+                instructions: "Write a concise and practical class performance report in simple Russian. Output plain text only.",
+                input: [
+                    {
+                        role: "user",
+                        content: [
+                            {
+                                type: "input_text",
+                                text: `Create report using this input: ${JSON.stringify(input)}`,
+                            },
+                        ],
+                    },
+                ],
+                max_output_tokens: 700,
+            });
+        }
+        catch (error) {
+            console.error("OpenAI class report failed, fallback used:", error);
+            return fallbackClassReport(input);
+        }
     },
     async generateChatReply(input) {
-        const config = ensureConfigured();
-        const history = (input.history ?? []).slice(-10);
-        const historyText = history
-            .map((item) => `${item.role === "assistant" ? "Ассистент" : "Пользователь"}: ${item.content}`)
-            .join("\n");
-        const prompt = [
-            "Ты школьный ИИ-ассистент Aqbobek Lyceum.",
-            "Отвечай коротко, понятно и по делу на русском языке.",
-            "Если вопрос о рисках и оценках, опирайся на переданный контекст.",
-            "Не придумывай факты, которых нет в контексте.",
-            `Роль пользователя: ${input.role}`,
-            `Имя пользователя: ${input.userName}`,
-            input.context?.mentorSummary ? `Сводка: ${input.context.mentorSummary}` : "",
-            input.context?.predictionsSummary ? `Прогнозы: ${input.context.predictionsSummary}` : "",
-            input.context?.recommendationHints?.length
-                ? `Подсказки: ${input.context.recommendationHints.join("; ")}`
-                : "",
-            historyText ? `История:\n${historyText}` : "",
-            `Новый вопрос пользователя: ${input.message}`,
-        ]
-            .filter(Boolean)
-            .join("\n\n");
-        return requestResponsesText(config, {
-            input: [
-                {
-                    role: "user",
-                    content: [{ type: "input_text", text: prompt }],
-                },
-            ],
-            max_output_tokens: 600,
-        });
+        try {
+            const config = ensureConfigured();
+            const history = (input.history ?? []).slice(-10);
+            const historyText = history
+                .map((item) => `${item.role === "assistant" ? "Ассистент" : "Пользователь"}: ${item.content}`)
+                .join("\n");
+            const prompt = [
+                "Ты школьный ИИ-ассистент Aqbobek Lyceum.",
+                "Отвечай коротко, понятно и по делу на русском языке.",
+                "Если вопрос о рисках и оценках, опирайся на переданный контекст.",
+                "Не придумывай факты, которых нет в контексте.",
+                `Роль пользователя: ${input.role}`,
+                `Имя пользователя: ${input.userName}`,
+                input.context?.mentorSummary ? `Сводка: ${input.context.mentorSummary}` : "",
+                input.context?.predictionsSummary ? `Прогнозы: ${input.context.predictionsSummary}` : "",
+                input.context?.recommendationHints?.length
+                    ? `Подсказки: ${input.context.recommendationHints.join("; ")}`
+                    : "",
+                historyText ? `История:\n${historyText}` : "",
+                `Новый вопрос пользователя: ${input.message}`,
+            ]
+                .filter(Boolean)
+                .join("\n\n");
+            return await requestResponsesText(config, {
+                input: [
+                    {
+                        role: "user",
+                        content: [{ type: "input_text", text: prompt }],
+                    },
+                ],
+                max_output_tokens: 600,
+            });
+        }
+        catch (error) {
+            console.error("OpenAI chat failed, fallback used:", error);
+            return fallbackChatReply(input);
+        }
     },
 };

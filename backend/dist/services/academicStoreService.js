@@ -64,6 +64,26 @@ const mapAchievement = (row) => ({
     badge: row.badge,
     date: row.date,
     points: row.points,
+    proofUrl: row.proof_url ?? undefined,
+    proofNote: row.proof_note ?? undefined,
+    proofAttachment: row.proof_file_name && row.proof_file_mime && row.proof_file_data_url
+        ? {
+            fileName: row.proof_file_name,
+            mimeType: row.proof_file_mime,
+            dataUrl: row.proof_file_data_url,
+        }
+        : undefined,
+    submittedBy: row.submitted_by ?? undefined,
+    submittedAt: row.submitted_at ?? undefined,
+    verification: row.verification_status
+        ? {
+            status: row.verification_status,
+            verifiedAt: row.verified_at ?? undefined,
+            verifiedBy: row.verified_by ?? undefined,
+            method: row.verification_method ?? undefined,
+            evidence: row.verification_evidence ?? undefined,
+        }
+        : undefined,
 });
 const dbPath = resolveDbPath();
 node_fs_1.default.mkdirSync(node_path_1.default.dirname(dbPath), { recursive: true });
@@ -111,10 +131,34 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_student_subject_progress_student_id
     ON student_subject_progress(student_id);
 `);
+const ensureColumn = (table, column, definition) => {
+    const rows = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!rows.some((item) => item.name === column)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+};
+ensureColumn("achievements", "proof_url", "TEXT");
+ensureColumn("achievements", "proof_note", "TEXT");
+ensureColumn("achievements", "proof_file_name", "TEXT");
+ensureColumn("achievements", "proof_file_mime", "TEXT");
+ensureColumn("achievements", "proof_file_data_url", "TEXT");
+ensureColumn("achievements", "submitted_by", "TEXT");
+ensureColumn("achievements", "submitted_at", "TEXT");
+ensureColumn("achievements", "verification_status", "TEXT");
+ensureColumn("achievements", "verified_at", "TEXT");
+ensureColumn("achievements", "verified_by", "TEXT");
+ensureColumn("achievements", "verification_method", "TEXT");
+ensureColumn("achievements", "verification_evidence", "TEXT");
 exports.academicStoreService = {
     listAchievements() {
         const rows = db
-            .prepare("SELECT id, student_id, title, type, badge, date, points, created_at FROM achievements ORDER BY date DESC, created_at DESC")
+            .prepare(`SELECT
+          id, student_id, title, type, badge, date, points,
+          proof_url, proof_note, proof_file_name, proof_file_mime, proof_file_data_url, submitted_by, submitted_at,
+          verification_status, verified_at, verified_by, verification_method, verification_evidence,
+          created_at
+        FROM achievements
+        ORDER BY date DESC, created_at DESC`)
             .all();
         return rows.map(mapAchievement);
     },
@@ -122,8 +166,18 @@ exports.academicStoreService = {
         const id = `ach-${(0, node_crypto_1.randomUUID)().slice(0, 8)}`;
         const createdAt = new Date().toISOString();
         db.prepare(`
-      INSERT INTO achievements (id, student_id, title, type, badge, date, points, created_at)
-      VALUES (@id, @student_id, @title, @type, @badge, @date, @points, @created_at)
+      INSERT INTO achievements (
+        id, student_id, title, type, badge, date, points,
+        proof_url, proof_note, proof_file_name, proof_file_mime, proof_file_data_url, submitted_by, submitted_at,
+        verification_status, verification_method, verification_evidence,
+        created_at
+      )
+      VALUES (
+        @id, @student_id, @title, @type, @badge, @date, @points,
+        @proof_url, @proof_note, @proof_file_name, @proof_file_mime, @proof_file_data_url, @submitted_by, @submitted_at,
+        @verification_status, @verification_method, @verification_evidence,
+        @created_at
+      )
     `).run({
             id,
             student_id: payload.studentId,
@@ -132,15 +186,66 @@ exports.academicStoreService = {
             badge: payload.badge.trim(),
             date: payload.date,
             points: Math.round(payload.points),
+            proof_url: payload.proofUrl?.trim() || null,
+            proof_note: payload.proofNote?.trim() || null,
+            proof_file_name: payload.proofAttachment?.fileName?.trim() || null,
+            proof_file_mime: payload.proofAttachment?.mimeType?.trim() || null,
+            proof_file_data_url: payload.proofAttachment?.dataUrl?.trim() || null,
+            submitted_by: payload.submittedBy?.trim() || null,
+            submitted_at: createdAt,
+            verification_status: "pending",
+            verification_method: "manual-review",
+            verification_evidence: payload.proofAttachment?.fileName?.trim() ||
+                payload.proofUrl?.trim() ||
+                payload.proofNote?.trim() ||
+                payload.badge.trim(),
             created_at: createdAt,
         });
         const created = db
-            .prepare("SELECT id, student_id, title, type, badge, date, points, created_at FROM achievements WHERE id = ?")
+            .prepare(`SELECT
+          id, student_id, title, type, badge, date, points,
+          proof_url, proof_note, proof_file_name, proof_file_mime, proof_file_data_url, submitted_by, submitted_at,
+          verification_status, verified_at, verified_by, verification_method, verification_evidence,
+          created_at
+        FROM achievements
+        WHERE id = ?`)
             .get(id);
         if (!created) {
             throw new Error("Unable to create achievement");
         }
         return mapAchievement(created);
+    },
+    verifyAchievement(payload) {
+        const verifiedAt = new Date().toISOString();
+        db.prepare(`
+      UPDATE achievements
+      SET
+        verification_status = 'verified',
+        verified_at = @verified_at,
+        verified_by = @verified_by,
+        verification_method = @verification_method,
+        verification_evidence = @verification_evidence
+      WHERE id = @id
+    `).run({
+            id: payload.achievementId,
+            verified_at: verifiedAt,
+            verified_by: payload.verifiedBy.trim(),
+            verification_method: payload.method?.trim() || "manual-review",
+            verification_evidence: payload.evidence?.trim() || null,
+        });
+        const row = db
+            .prepare(`SELECT
+          id, student_id, title, type, badge, date, points,
+          proof_url, proof_note, proof_file_name, proof_file_mime, proof_file_data_url, submitted_by, submitted_at,
+          verification_status, verified_at, verified_by, verification_method, verification_evidence,
+          created_at
+        FROM achievements
+        WHERE id = ?`)
+            .get(payload.achievementId);
+        if (!row) {
+            throw new Error("Achievement not found");
+        }
+        return mapAchievement(row);
     },
     listStudentProfiles() {
         const profileRows = db

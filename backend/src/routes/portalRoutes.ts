@@ -239,7 +239,7 @@ portalRoutes.post("/ai-chat", async (req, res) => {
 
     res.json({
       reply: aiReply,
-      source: "openai",
+      source: openAiMentorService.isEnabled() ? "openai" : "fallback",
     });
   } catch (error) {
     const messageText = error instanceof Error ? error.message : "Не удалось получить ответ AI-чата";

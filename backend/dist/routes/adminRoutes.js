@@ -53,6 +53,20 @@ const streamGroupSchema = zod_1.z.object({
     weeklyHours: zod_1.z.number().int().min(1).max(8),
     duration: zod_1.z.number().int().min(1).max(2).optional(),
 });
+const plannerWeightsSchema = zod_1.z
+    .object({
+    classDailyLoad: zod_1.z.number().min(0).max(3),
+    teacherDailyLoad: zod_1.z.number().min(0).max(3),
+    sameSubjectDay: zod_1.z.number().min(0).max(3),
+    classGap: zod_1.z.number().min(0).max(3),
+    teacherGap: zod_1.z.number().min(0).max(3),
+    lateLessons: zod_1.z.number().min(0).max(3),
+    classSpread: zod_1.z.number().min(0).max(3),
+    teacherSpread: zod_1.z.number().min(0).max(3),
+    centerBias: zod_1.z.number().min(0).max(3),
+    adjacentSameSubject: zod_1.z.number().min(0).max(3),
+})
+    .partial();
 const scheduleGenerateSchema = zod_1.z.object({
     days: zod_1.z.array(zod_1.z.number().int().min(1).max(7)).min(1).optional(),
     slotsPerDay: zod_1.z.number().int().min(4).max(10).optional(),
@@ -71,6 +85,7 @@ const scheduleGenerateSchema = zod_1.z.object({
         slot: zod_1.z.number().int().min(1).max(12),
     }))
         .optional(),
+    weights: plannerWeightsSchema.optional(),
 });
 const teacherAbsenceSchema = zod_1.z.object({
     teacherId: zod_1.z.string().trim().min(2),

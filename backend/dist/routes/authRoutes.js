@@ -8,6 +8,7 @@ const storageService_1 = require("../services/storageService");
 const loginSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
     password: zod_1.z.string().min(3),
+    selectedRole: zod_1.z.enum(["student", "teacher", "parent", "admin"]),
 });
 exports.authRoutes = (0, express_1.Router)();
 exports.authRoutes.post("/login", (req, res) => {
@@ -19,10 +20,14 @@ exports.authRoutes.post("/login", (req, res) => {
         });
         return;
     }
-    const { email, password } = result.data;
+    const { email, password, selectedRole } = result.data;
     const user = storageService_1.storageService.getUserByEmail(email.toLowerCase());
     if (!user || user.password !== password) {
         res.status(401).json({ message: "Неверная почта или пароль" });
+        return;
+    }
+    if (user.role !== selectedRole) {
+        res.status(403).json({ message: "Выбранная роль не совпадает с ролью аккаунта" });
         return;
     }
     const token = (0, auth_1.createToken)({ userId: user.id, role: user.role });

@@ -199,6 +199,7 @@ const mapMentorOutput = (
   },
 ) => {
   const drivers = [
+    "Гибридный подход: локальный скоринг рисков + LLM для формулировок",
     ...payload.weaknesses.slice(0, 2).map((item) => `Зона внимания: ${item}`),
     ...payload.strengths.slice(0, 2).map((item) => `Сильная сторона: ${item}`),
     ...(payload.trends ?? [])
