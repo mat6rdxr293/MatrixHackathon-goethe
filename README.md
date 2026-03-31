@@ -162,3 +162,15 @@ AI-блок в системе может использоваться для:
 ### 1. Установка проекта
 ```bat
 setup_project.bat
+```
+
+## Accounts
+Use these demo accounts to sign in:
+
+| Role | Login (email) | Password |
+|---|---|---|
+| Admin | `admin@aqbobek.edu` | `admin123` |
+| Teacher | `teacher@aqbobek.edu` | `teacher123` |
+| Parent | `parent@aqbobek.edu` | `parent123` |
+| Student | `student@aqbobek.edu` | `student123` |
+| Student | `student2@aqbobek.edu` | `student123` |
