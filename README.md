@@ -164,13 +164,13 @@ AI-блок в системе может использоваться для:
 setup_project.bat
 ```
 
-## Accounts
-Use these demo accounts to sign in:
+## Аккаунты
+Используйте их для входа в аккаунт:
 
-| Role | Login (email) | Password |
+| Роль | Логин (email) | Пароль |
 |---|---|---|
-| Admin | `admin@aqbobek.edu` | `admin123` |
-| Teacher | `teacher@aqbobek.edu` | `teacher123` |
-| Parent | `parent@aqbobek.edu` | `parent123` |
-| Student | `student@aqbobek.edu` | `student123` |
-| Student | `student2@aqbobek.edu` | `student123` |
+| Админ | `admin@aqbobek.edu` | `admin123` |
+| Учитель | `teacher@aqbobek.edu` | `teacher123` |
+| Родитель | `parent@aqbobek.edu` | `parent123` |
+| Ученик | `student@aqbobek.edu` | `student123` |
+| Ученик | `student2@aqbobek.edu` | `student123` |
