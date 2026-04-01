@@ -11,6 +11,14 @@ type BilimClassAuthResponse = {
   expiresAtEpochSec?: number;
 };
 
+type BilimClassAuthHints = {
+  schoolIds: number[];
+  groupIds: number[];
+  eduYears: number[];
+  periods: number[];
+  periodTypes: string[];
+};
+
 type BilimClassStudentBinding = {
   studentId: string;
   fullName: string;
@@ -89,6 +97,7 @@ let lastSyncAt: string | null = null;
 let lastError: string | null = null;
 
 const authCacheByKey = new Map<string, BilimClassAuthResponse>();
+const authHintsByKey = new Map<string, BilimClassAuthHints>();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -241,6 +250,275 @@ const parsePositiveNumber = (value: string | undefined): number | null => {
     return null;
   }
   return Math.round(parsed);
+};
+
+const normalizeHintNumber = (value: unknown) => {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return Math.round(parsed);
+};
+
+const pushUniqueNumber = (target: number[], value: unknown, predicate?: (value: number) => boolean) => {
+  const normalized = normalizeHintNumber(value);
+  if (!normalized) {
+    return;
+  }
+  if (predicate && !predicate(normalized)) {
+    return;
+  }
+  if (!target.includes(normalized)) {
+    target.push(normalized);
+  }
+};
+
+const pushUniqueString = (target: string[], value: unknown, normalize = true) => {
+  const raw = cleanString(value);
+  if (!raw) {
+    return;
+  }
+  const nextValue = normalize ? raw.toLowerCase() : raw;
+  if (!target.includes(nextValue)) {
+    target.push(nextValue);
+  }
+};
+
+const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return null;
+  }
+
+  try {
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const decoded = Buffer.from(padded, "base64").toString("utf8");
+    const parsed = JSON.parse(decoded);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const extractHintsFromPayload = (payload: unknown): BilimClassAuthHints => {
+  const hints: BilimClassAuthHints = {
+    schoolIds: [],
+    groupIds: [],
+    eduYears: [],
+    periods: [],
+    periodTypes: [],
+  };
+
+  const walk = (value: unknown, depth: number) => {
+    if (depth > 6 || !isRecord(value)) {
+      return;
+    }
+
+    for (const [rawKey, rawValue] of Object.entries(value)) {
+      const key = rawKey.toLowerCase().replace(/[\s_-]/g, "");
+      if (["schoolid", "idschool", "school"].includes(key)) {
+        pushUniqueNumber(hints.schoolIds, rawValue, (candidate) => candidate > 1000);
+      }
+      if (["groupid", "classid", "studentgroupid", "educgroupid"].includes(key)) {
+        pushUniqueNumber(hints.groupIds, rawValue, (candidate) => candidate > 1000);
+      }
+      if (["eduyear", "academicyear", "schoolyear", "year"].includes(key)) {
+        pushUniqueNumber(hints.eduYears, rawValue, (candidate) => candidate >= 2000 && candidate <= 2100);
+      }
+      if (["period", "quarter", "trimester", "semester", "term"].includes(key)) {
+        pushUniqueNumber(hints.periods, rawValue, (candidate) => candidate >= 1 && candidate <= 12);
+      }
+      if (["periodtype", "period"].includes(key) && typeof rawValue === "string") {
+        pushUniqueString(hints.periodTypes, rawValue);
+      }
+
+      if (Array.isArray(rawValue)) {
+        for (const item of rawValue) {
+          walk(item, depth + 1);
+        }
+        continue;
+      }
+
+      if (isRecord(rawValue)) {
+        walk(rawValue, depth + 1);
+      }
+    }
+  };
+
+  walk(payload, 0);
+  return hints;
+};
+
+const mergeAuthHints = (...items: Array<BilimClassAuthHints | null | undefined>): BilimClassAuthHints => {
+  const merged: BilimClassAuthHints = {
+    schoolIds: [],
+    groupIds: [],
+    eduYears: [],
+    periods: [],
+    periodTypes: [],
+  };
+
+  for (const item of items) {
+    if (!item) {
+      continue;
+    }
+    for (const value of item.schoolIds) {
+      pushUniqueNumber(merged.schoolIds, value);
+    }
+    for (const value of item.groupIds) {
+      pushUniqueNumber(merged.groupIds, value);
+    }
+    for (const value of item.eduYears) {
+      pushUniqueNumber(merged.eduYears, value);
+    }
+    for (const value of item.periods) {
+      pushUniqueNumber(merged.periods, value);
+    }
+    for (const value of item.periodTypes) {
+      pushUniqueString(merged.periodTypes, value);
+    }
+  }
+
+  return merged;
+};
+
+const collectKnownSchoolIds = (config: BilimClassConfig) => {
+  const result: number[] = [];
+  pushUniqueNumber(result, config.schoolId);
+  for (const value of Object.values(config.schoolByClass)) {
+    pushUniqueNumber(result, value);
+  }
+  for (const value of Object.values(config.schoolByStudent)) {
+    pushUniqueNumber(result, value);
+  }
+  return result;
+};
+
+const collectKnownGroupIds = (config: BilimClassConfig) => {
+  const result: number[] = [];
+  pushUniqueNumber(result, config.defaultGroupId);
+  for (const value of Object.values(config.groupByClass)) {
+    pushUniqueNumber(result, value);
+  }
+  for (const value of Object.values(config.groupByStudent)) {
+    pushUniqueNumber(result, value);
+  }
+  return result;
+};
+
+const deriveAcademicYear = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return month >= 9 ? year : year - 1;
+};
+
+const deriveQuarter = () => {
+  const month = new Date().getMonth() + 1;
+  if (month >= 9 && month <= 10) {
+    return 1;
+  }
+  if (month >= 11 && month <= 12) {
+    return 2;
+  }
+  if (month >= 1 && month <= 3) {
+    return 3;
+  }
+  return 4;
+};
+
+const buildBindingCandidates = (
+  binding: RuntimeStudentBinding,
+  config: BilimClassConfig,
+  hints: BilimClassAuthHints,
+): RuntimeStudentBinding[] => {
+  const schoolCandidates: number[] = [];
+  const groupCandidates: number[] = [];
+  const eduYearCandidates: number[] = [];
+  const periodCandidates: number[] = [];
+  const periodTypeCandidates: string[] = [];
+
+  pushUniqueNumber(schoolCandidates, binding.schoolId);
+  for (const value of hints.schoolIds) {
+    pushUniqueNumber(schoolCandidates, value);
+  }
+  for (const value of collectKnownSchoolIds(config)) {
+    pushUniqueNumber(schoolCandidates, value);
+  }
+
+  pushUniqueNumber(groupCandidates, binding.groupId);
+  for (const value of hints.groupIds) {
+    pushUniqueNumber(groupCandidates, value);
+  }
+  for (const value of collectKnownGroupIds(config)) {
+    pushUniqueNumber(groupCandidates, value);
+  }
+
+  pushUniqueNumber(eduYearCandidates, binding.eduYear, (value) => value >= 2000 && value <= 2100);
+  for (const value of hints.eduYears) {
+    pushUniqueNumber(eduYearCandidates, value, (candidate) => candidate >= 2000 && candidate <= 2100);
+  }
+  pushUniqueNumber(eduYearCandidates, config.eduYear, (value) => value >= 2000 && value <= 2100);
+  pushUniqueNumber(eduYearCandidates, deriveAcademicYear(), (value) => value >= 2000 && value <= 2100);
+
+  pushUniqueNumber(periodCandidates, binding.period, (value) => value >= 1 && value <= 12);
+  for (const value of hints.periods) {
+    pushUniqueNumber(periodCandidates, value, (candidate) => candidate >= 1 && candidate <= 12);
+  }
+  pushUniqueNumber(periodCandidates, config.period, (value) => value >= 1 && value <= 12);
+  pushUniqueNumber(periodCandidates, deriveQuarter(), (value) => value >= 1 && value <= 12);
+
+  pushUniqueString(periodTypeCandidates, binding.periodType);
+  for (const value of hints.periodTypes) {
+    pushUniqueString(periodTypeCandidates, value);
+  }
+  pushUniqueString(periodTypeCandidates, config.periodType);
+  pushUniqueString(periodTypeCandidates, "quarter");
+
+  const result: RuntimeStudentBinding[] = [];
+  const dedupe = new Set<string>();
+
+  const pushCandidate = (candidate: RuntimeStudentBinding) => {
+    if (!candidate.groupId || !candidate.schoolId || !candidate.eduYear || !candidate.period || !candidate.periodType) {
+      return;
+    }
+    const key = `${candidate.schoolId}|${candidate.groupId}|${candidate.eduYear}|${candidate.period}|${candidate.periodType}`;
+    if (dedupe.has(key)) {
+      return;
+    }
+    dedupe.add(key);
+    result.push(candidate);
+  };
+
+  pushCandidate({
+    ...binding,
+    periodType: cleanString(binding.periodType).toLowerCase(),
+  });
+
+  for (const schoolId of schoolCandidates.slice(0, 6)) {
+    for (const groupId of groupCandidates.slice(0, 6)) {
+      for (const eduYear of eduYearCandidates.slice(0, 4)) {
+        for (const period of periodCandidates.slice(0, 4)) {
+          for (const periodType of periodTypeCandidates.slice(0, 3)) {
+            pushCandidate({
+              ...binding,
+              schoolId,
+              groupId,
+              eduYear,
+              period,
+              periodType,
+            });
+            if (result.length >= 48) {
+              return result;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return result;
 };
 
 const resolveLoginPayload = (config: BilimClassConfig, login: string, password: string) => {
@@ -730,19 +1008,22 @@ const buildAuthCacheKey = (config: BilimClassConfig, credentials?: BilimCredenti
 const ensureAuth = async (
   config: BilimClassConfig,
   credentials?: BilimCredentials | null,
-): Promise<BilimClassAuthResponse | null> => {
+): Promise<{ auth: BilimClassAuthResponse; cacheKey: string } | null> => {
+  const cacheKey = buildAuthCacheKey(config, credentials);
   if (config.staticToken && !credentials) {
     return {
-      accessToken: config.staticToken,
+      auth: {
+        accessToken: config.staticToken,
+      },
+      cacheKey,
     };
   }
 
-  const cacheKey = buildAuthCacheKey(config, credentials);
   const cachedAuth = authCacheByKey.get(cacheKey);
   if (cachedAuth?.accessToken) {
     const nowSec = Math.floor(Date.now() / 1000);
     if (!cachedAuth.expiresAtEpochSec || cachedAuth.expiresAtEpochSec > nowSec + 60) {
-      return cachedAuth;
+      return { auth: cachedAuth, cacheKey };
     }
   }
 
@@ -776,7 +1057,10 @@ const ensureAuth = async (
     }
 
     authCacheByKey.set(cacheKey, auth);
-    return auth;
+    const payloadHints = extractHintsFromPayload(response.data);
+    const tokenHints = extractHintsFromPayload(decodeJwtPayload(auth.accessToken));
+    authHintsByKey.set(cacheKey, mergeAuthHints(payloadHints, tokenHints));
+    return { auth, cacheKey };
   } catch (error) {
     const message = error instanceof Error ? error.message : "BilimClass login failed";
     lastError = `BilimClass login failed: ${message}`;
@@ -866,9 +1150,6 @@ const buildBindingsFromLinkedAccounts = (
     if (!binding) {
       continue;
     }
-    if (!binding.groupId || !binding.schoolId || !binding.eduYear || !binding.period || !binding.periodType) {
-      continue;
-    }
     result.push({
       binding,
       credentials: {
@@ -907,17 +1188,40 @@ const syncProfilesForBindings = async (
   };
 
   for (const item of bindings) {
-    const auth = await ensureAuth(config, item.credentials);
-    if (!auth) {
+    const authContext = await ensureAuth(config, item.credentials);
+    if (!authContext) {
       continue;
     }
 
-    const subjects = await getSubjectsForBinding(item.binding, auth, item.credentials);
-    if (!subjects) {
+    const hints = authHintsByKey.get(authContext.cacheKey) ?? {
+      schoolIds: [],
+      groupIds: [],
+      eduYears: [],
+      periods: [],
+      periodTypes: [],
+    };
+    const candidates = buildBindingCandidates(item.binding, config, hints);
+    if (candidates.length === 0) {
       continue;
     }
+
+    let resolvedBinding: RuntimeStudentBinding | null = null;
+    let subjects: Record<string, unknown>[] | null = null;
+    for (const candidate of candidates) {
+      const candidateSubjects = await getSubjectsForBinding(candidate, authContext.auth, item.credentials);
+      if (candidateSubjects) {
+        resolvedBinding = candidate;
+        subjects = candidateSubjects;
+        break;
+      }
+    }
+
+    if (!subjects || !resolvedBinding) {
+      continue;
+    }
+
     const fallbackProfile = fallbackByStudent.get(item.binding.studentId) ?? null;
-    const profile = buildProfileFromDiary(item.binding, subjects, fallbackProfile);
+    const profile = buildProfileFromDiary(resolvedBinding, subjects, fallbackProfile);
     profileByStudent.set(profile.studentId, profile);
   }
 
