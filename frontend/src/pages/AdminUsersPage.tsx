@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { roleLabelKey } from "../config/labels";
 import { useI18n } from "../hooks/useI18n";
@@ -9,6 +9,7 @@ import type {
   AdminUsersResponse,
   BilimSyncResponse,
   Role,
+  SafeUser,
 } from "../types/portal";
 import { DataState } from "../components/ui/DataState";
 import { PageTransition } from "../components/ui/PageTransition";
@@ -33,7 +34,7 @@ const initialUserForm: UserFormState = {
   linkedStudentId: "",
 };
 
-type UsersModalMode = "class" | "account" | null;
+type UsersModalMode = "class" | "account" | "password" | null;
 
 export function AdminUsersPage() {
   const { t } = useI18n();
@@ -42,6 +43,7 @@ export function AdminUsersPage() {
   const studentsState = useApiData<BilimSyncResponse>("/api/integrations/bilimclass/students");
 
   const [filterRole, setFilterRole] = useState<Role | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [classId, setClassId] = useState("");
   const [classTeacherId, setClassTeacherId] = useState("");
   const [classError, setClassError] = useState<string | null>(null);
@@ -53,13 +55,33 @@ export function AdminUsersPage() {
   const [userSaving, setUserSaving] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
   const [userSuccess, setUserSuccess] = useState<string | null>(null);
+  const [passwordTargetUser, setPasswordTargetUser] = useState<SafeUser | null>(null);
+  const [nextPassword, setNextPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pageSuccess, setPageSuccess] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [userActionInProgress, setUserActionInProgress] = useState<string | null>(null);
 
   const users = useMemo(() => usersState.data?.users ?? [], [usersState.data]);
   const classes = useMemo(() => classesState.data?.items ?? [], [classesState.data]);
   const studentProfiles = useMemo(() => studentsState.data?.students ?? [], [studentsState.data]);
 
-  const filtered = users.filter((item) => (filterRole === "all" ? true : item.role === filterRole));
+  const filtered = users.filter((item) => {
+    if (filterRole !== "all" && item.role !== filterRole) {
+      return false;
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return [item.name, item.email, item.classId ?? "", item.linkedStudentId ?? ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+  });
   const teachers = useMemo(() => users.filter((item) => item.role === "teacher"), [users]);
 
   const countByRole = (role: Role) => users.filter((item) => item.role === role).length;
@@ -71,11 +93,24 @@ export function AdminUsersPage() {
     await Promise.all([usersState.refresh(), classesState.refresh(), studentsState.refresh()]);
   };
 
+  const resetPasswordModal = useCallback(() => {
+    setPasswordTargetUser(null);
+    setNextPassword("");
+    setPasswordError(null);
+    setPasswordSaving(false);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setModalMode(null);
+    resetPasswordModal();
+  }, [resetPasswordModal]);
+
   const submitClass = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setClassSaving(true);
     setClassError(null);
     setClassSuccess(null);
+    setPageError(null);
 
     try {
       await privateApi.post("/api/admin/classes", {
@@ -87,7 +122,7 @@ export function AdminUsersPage() {
       const successMessage = t("k_184");
       setClassSuccess(successMessage);
       setPageSuccess(successMessage);
-      setModalMode(null);
+      closeModal();
       await refreshAll().catch(() => undefined);
     } catch (err) {
       setClassError(getErrorMessage(err));
@@ -101,6 +136,7 @@ export function AdminUsersPage() {
     setUserSaving(true);
     setUserError(null);
     setUserSuccess(null);
+    setPageError(null);
 
     const payload = {
       role: userForm.role,
@@ -120,12 +156,69 @@ export function AdminUsersPage() {
       const successMessage = t("k_191");
       setUserSuccess(successMessage);
       setPageSuccess(successMessage);
-      setModalMode(null);
+      closeModal();
       await refreshAll().catch(() => undefined);
     } catch (err) {
       setUserError(getErrorMessage(err));
     } finally {
       setUserSaving(false);
+    }
+  };
+
+  const openPasswordModal = (targetUser: SafeUser) => {
+    setPageError(null);
+    setPasswordTargetUser(targetUser);
+    setNextPassword("");
+    setPasswordError(null);
+    setModalMode("password");
+  };
+
+  const submitPasswordChange = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!passwordTargetUser) {
+      return;
+    }
+
+    const password = nextPassword.trim();
+    if (password.length < 6) {
+      setPasswordError(t("k_368"));
+      return;
+    }
+
+    setPageError(null);
+    setPasswordError(null);
+    setPasswordSaving(true);
+    setUserActionInProgress(passwordTargetUser.id);
+    try {
+      await privateApi.patch(`/api/admin/users/${encodeURIComponent(passwordTargetUser.id)}/password`, {
+        password,
+      });
+      setPageSuccess(t("k_365"));
+      closeModal();
+    } catch (err) {
+      setPasswordError(getErrorMessage(err));
+    } finally {
+      setPasswordSaving(false);
+      setUserActionInProgress(null);
+    }
+  };
+
+  const deleteUser = async (targetUser: SafeUser) => {
+    const confirmDelete = window.confirm(`${t("k_366")}: ${targetUser.name}?`);
+    if (!confirmDelete) {
+      return;
+    }
+
+    setPageError(null);
+    setUserActionInProgress(targetUser.id);
+    try {
+      await privateApi.delete(`/api/admin/users/${encodeURIComponent(targetUser.id)}`);
+      setPageSuccess(t("k_371"));
+      await refreshAll().catch(() => undefined);
+    } catch (err) {
+      setPageError(getErrorMessage(err));
+    } finally {
+      setUserActionInProgress(null);
     }
   };
 
@@ -135,12 +228,12 @@ export function AdminUsersPage() {
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setModalMode(null);
+        closeModal();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [modalMode]);
+  }, [closeModal, modalMode]);
 
   useEffect(() => {
     if (!pageSuccess) {
@@ -151,12 +244,15 @@ export function AdminUsersPage() {
   }, [pageSuccess]);
 
   const openModal = (mode: Exclude<UsersModalMode, null>) => {
+    setPageError(null);
     if (mode === "class") {
       setClassError(null);
       setClassSuccess(null);
-    } else {
+      resetPasswordModal();
+    } else if (mode === "account") {
       setUserError(null);
       setUserSuccess(null);
+      resetPasswordModal();
     }
     setModalMode(mode);
   };
@@ -186,6 +282,7 @@ export function AdminUsersPage() {
             </section>
 
             {pageSuccess ? <p className="users-success-banner">{pageSuccess}</p> : null}
+            {pageError ? <p className="form-error">{pageError}</p> : null}
 
             <div className="stats-grid stats-grid-four">
               <StatCard title={t("k_140")} value={countByRole("student")} />
@@ -215,6 +312,14 @@ export function AdminUsersPage() {
                   </button>
                 ))}
               </div>
+              <div className="users-search">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={t("k_363")}
+                />
+              </div>
             </div>
 
             <Section title={t("k_145")}>
@@ -226,9 +331,15 @@ export function AdminUsersPage() {
                     <th>{t("k_127")}</th>
                     <th>{t("k_083")}</th>
                     <th>{t("k_189")}</th>
+                    <th>{t("k_364")}</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={6}>{t("k_340")}</td>
+                    </tr>
+                  ) : null}
                   {filtered.map((item) => (
                     <tr key={item.id}>
                       <td>{item.name}</td>
@@ -236,6 +347,26 @@ export function AdminUsersPage() {
                       <td>{t(roleLabelKey(item.role))}</td>
                       <td>{item.classId ?? "-"}</td>
                       <td>{item.linkedStudentId ?? "-"}</td>
+                      <td>
+                        <div className="action-row users-table-actions">
+                          <button
+                            className="outline-button"
+                            type="button"
+                            disabled={userActionInProgress === item.id}
+                            onClick={() => openPasswordModal(item)}
+                          >
+                            {t("k_367")}
+                          </button>
+                          <button
+                            className="outline-button danger"
+                            type="button"
+                            disabled={userActionInProgress === item.id}
+                            onClick={() => void deleteUser(item)}
+                          >
+                            {t("k_366")}
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -276,15 +407,17 @@ export function AdminUsersPage() {
               type="button"
               aria-hidden={modalMode ? "false" : "true"}
               tabIndex={-1}
-              onClick={() => setModalMode(null)}
+              onClick={closeModal}
             />
 
             <aside className={modalMode ? "users-modal open" : "users-modal"} aria-hidden={!modalMode}>
               <header className="users-modal-head">
                 <div>
-                  <h3>{modalMode === "class" ? t("k_180") : t("k_187")}</h3>
+                  <h3>
+                    {modalMode === "class" ? t("k_180") : modalMode === "password" ? t("k_367") : t("k_187")}
+                  </h3>
                 </div>
-                <button className="icon-btn users-modal-close" type="button" onClick={() => setModalMode(null)}>
+                <button className="icon-btn users-modal-close" type="button" onClick={closeModal}>
                   <X size={18} />
                 </button>
               </header>
@@ -304,6 +437,15 @@ export function AdminUsersPage() {
                 >
                   {t("k_183")}
                 </button>
+                {passwordTargetUser ? (
+                  <button
+                    className={modalMode === "password" ? "chip-button active" : "chip-button"}
+                    type="button"
+                    onClick={() => setModalMode("password")}
+                  >
+                    {t("k_367")}
+                  </button>
+                ) : null}
               </div>
 
               {modalMode === "class" ? (
@@ -327,6 +469,37 @@ export function AdminUsersPage() {
                   {classSuccess ? <p className="success-text">{classSuccess}</p> : null}
                   <button className="solid-button" type="submit" disabled={classSaving}>
                     {classSaving ? t("k_151") : t("k_183")}
+                  </button>
+                </form>
+              ) : modalMode === "password" ? (
+                <form className="admin-form" onSubmit={submitPasswordChange}>
+                  <label>
+                    {t("k_126")}
+                    <input value={passwordTargetUser?.name ?? ""} disabled />
+                  </label>
+                  <label>
+                    {t("k_067")}
+                    <input value={passwordTargetUser?.email ?? ""} disabled />
+                  </label>
+                  <label>
+                    {t("k_188")}
+                    <input
+                      type="password"
+                      value={nextPassword}
+                      onChange={(event) => setNextPassword(event.target.value)}
+                      minLength={6}
+                      required
+                      autoFocus
+                    />
+                  </label>
+                  <p className="muted-inline">{t("k_368")}</p>
+                  {passwordError ? <p className="form-error">{passwordError}</p> : null}
+                  <button
+                    className="solid-button"
+                    type="submit"
+                    disabled={passwordSaving || !passwordTargetUser}
+                  >
+                    {passwordSaving ? t("k_151") : t("k_367")}
                   </button>
                 </form>
               ) : (

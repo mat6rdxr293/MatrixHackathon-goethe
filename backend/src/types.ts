@@ -8,6 +8,14 @@ export type User = {
   name: string;
   classId?: string;
   linkedStudentId?: string;
+  bilimLinked?: boolean;
+  bilimLogin?: string;
+  bilimLinkedAt?: string;
+  bilimSchoolId?: number;
+  bilimGroupId?: number;
+  bilimEduYear?: number;
+  bilimPeriod?: number;
+  bilimPeriodType?: string;
 };
 
 export type GradePoint = {

@@ -164,7 +164,29 @@ const getLinkedStudent = (user: SafeUser, profiles: StudentProfile[]) => {
       : user.role === "parent"
         ? user.linkedStudentId
         : undefined;
-  return profiles.find((student) => student.studentId === studentId);
+
+  if (!studentId) {
+    return undefined;
+  }
+
+  const existing = profiles.find((student) => student.studentId === studentId);
+  if (existing) {
+    return existing;
+  }
+
+  if (user.role === "student" || user.role === "parent") {
+    const sourceUser = user.role === "student" ? storageService.getUserById(user.id) : undefined;
+    return {
+      studentId,
+      fullName: sourceUser?.name ?? user.name ?? "Ученик",
+      classId: sourceUser?.classId ?? user.classId ?? "—",
+      averageScore: 0,
+      weakSubjects: [],
+      progress: [],
+    };
+  }
+
+  return undefined;
 };
 
 const averageScore = (profiles: StudentProfile[]) => {
@@ -547,7 +569,42 @@ export const analyticsService = {
 
     const profile = getLinkedStudent(user, profiles);
     if (!profile) {
-      throw new Error("Профиль не найден");
+      return mapMentorOutput(user.role, {
+        summary: "Профиль ученика пока пустой. Подключите BilimClass в разделе «Профиль», чтобы запустить персональную аналитику.",
+        strengths: [],
+        weaknesses: [],
+        recommendations: [
+          "Откройте «Профиль» и привяжите аккаунт BilimClass.",
+          "После подключения обновите страницу ИИ-помощника.",
+        ],
+        mode: "demo",
+        trends: [],
+        explainability: {
+          confidence: 35,
+          drivers: ["Недостаточно академических данных для расчета персонального риска."],
+          source: "Профиль пользователя",
+        },
+      });
+    }
+
+    if (profile.progress.length === 0) {
+      return mapMentorOutput(user.role, {
+        summary: `${profile.fullName}: пока нет оценок и трендов в дневнике, поэтому детальный риск не рассчитан.`,
+        strengths: [],
+        weaknesses: [],
+        recommendations: [
+          "Подключите BilimClass-аккаунт в профиле.",
+          "Проверьте, что выбран корректный ученик и класс.",
+          "После появления оценок откройте анализ повторно.",
+        ],
+        mode: "demo",
+        trends: [],
+        explainability: {
+          confidence: 42,
+          drivers: ["Данные по предметам отсутствуют, расчет риска временно ограничен."],
+          source: "Профиль ученика",
+        },
+      });
     }
 
     const risk = calculateStudentRisk({

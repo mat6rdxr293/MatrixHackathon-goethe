@@ -85,6 +85,16 @@ const achievementVerifySchema = z.object({
   evidence: z.string().trim().max(500).optional(),
 });
 
+const bilimBindingSchema = z.object({
+  login: z.string().trim().min(3).max(160),
+  password: z.string().min(3).max(160),
+  schoolId: z.number().int().positive().optional(),
+  groupId: z.number().int().positive().optional(),
+  eduYear: z.number().int().positive().optional(),
+  period: z.number().int().positive().optional(),
+  periodType: z.string().trim().min(1).max(40).optional(),
+});
+
 const summarizePredictions = (payload: Awaited<ReturnType<typeof predictionService.getPredictionsByRole>>) => {
   if (payload.role === "student" || payload.role === "parent") {
     return payload.prediction?.topRiskMessage ?? "";
@@ -221,6 +231,106 @@ portalRoutes.get("/events", async (req, res) => {
   }
   const feed = await analyticsService.getEvents(req.user);
   res.json(feed);
+});
+
+portalRoutes.get("/profile/bilimclass", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ message: "Требуется вход в систему" });
+    return;
+  }
+
+  const binding = storageService.getBilimBinding(req.user.id);
+  if (!binding) {
+    res.status(404).json({ message: "Пользователь не найден" });
+    return;
+  }
+
+  res.json({
+    provider: "BilimClass",
+    linked: binding.linked,
+    login: binding.login,
+    linkedAt: binding.linkedAt,
+    schoolId: binding.schoolId,
+    groupId: binding.groupId,
+    eduYear: binding.eduYear,
+    period: binding.period,
+    periodType: binding.periodType,
+  });
+});
+
+portalRoutes.put("/profile/bilimclass", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ message: "Требуется вход в систему" });
+    return;
+  }
+
+  const parsed = bilimBindingSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Неверные данные запроса", errors: parsed.error.flatten() });
+    return;
+  }
+
+  const { login, password, schoolId, groupId, eduYear, period, periodType } = parsed.data;
+  const verification = await bilimClassService.verifyCredentials(login, password);
+
+  if (!verification.ok) {
+    res.status(400).json({
+      message: verification.error ?? "Не удалось подключить аккаунт BilimClass",
+    });
+    return;
+  }
+
+  const binding = storageService.setBilimBinding(req.user.id, {
+    login,
+    password,
+    schoolId,
+    groupId,
+    eduYear,
+    period,
+    periodType,
+  });
+  if (!binding) {
+    res.status(404).json({ message: "Пользователь не найден" });
+    return;
+  }
+
+  res.json({
+    provider: "BilimClass",
+    linked: binding.linked,
+    login: binding.login,
+    linkedAt: binding.linkedAt,
+    schoolId: binding.schoolId,
+    groupId: binding.groupId,
+    eduYear: binding.eduYear,
+    period: binding.period,
+    periodType: binding.periodType,
+    accountName: verification.accountName,
+  });
+});
+
+portalRoutes.delete("/profile/bilimclass", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ message: "Требуется вход в систему" });
+    return;
+  }
+
+  const binding = storageService.clearBilimBinding(req.user.id);
+  if (!binding) {
+    res.status(404).json({ message: "Пользователь не найден" });
+    return;
+  }
+
+  res.json({
+    provider: "BilimClass",
+    linked: false,
+    login: null,
+    linkedAt: null,
+    schoolId: null,
+    groupId: null,
+    eduYear: null,
+    period: null,
+    periodType: null,
+  });
 });
 
 portalRoutes.get("/ai-mentor", async (req, res) => {
@@ -415,7 +525,7 @@ portalRoutes.get("/student-profiles/:studentId", async (req, res) => {
     return;
   }
 
-  const result = await studentProfileService.getCard(req.params.studentId ?? "");
+  const result = await studentProfileService.getCard(req.params.studentId ?? "", req.user);
   if (!result) {
     res.status(404).json({ message: "Профиль ученика не найден" });
     return;

@@ -7,7 +7,7 @@
   Star,
   TrendingUp,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { StudentHistoryChart } from "../components/charts/Charts";
 import { DataState } from "../components/ui/DataState";
@@ -16,9 +16,15 @@ import { Section } from "../components/ui/Section";
 import { useApiData } from "../hooks/useApiData";
 import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../hooks/useI18n";
+import { getErrorMessage, privateApi } from "../lib/api";
 import { trendTone } from "../lib/api";
 import { formatDate } from "../lib/format";
-import type { SafeUser, StudentProfileCardResponse } from "../types/portal";
+import type {
+  BilimBindingStatusResponse,
+  BilimBindingUpdateResponse,
+  SafeUser,
+  StudentProfileCardResponse,
+} from "../types/portal";
 
 type ProfileTab = "overview" | "grades" | "attendance" | "achievements" | "ai";
 
@@ -50,6 +56,144 @@ function SelfRoleProfile({ user }: { user: SafeUser }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function BilimClassBindingCard() {
+  const { t, lang } = useI18n();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<BilimBindingStatusResponse | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const loadStatus = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await privateApi.get<BilimBindingStatusResponse>("/api/profile/bilimclass");
+      setStatus(response.data);
+      setLogin(response.data.login ?? "");
+    } catch (err) {
+      setLoadError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadStatus();
+  }, []);
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setFormError(null);
+    setSuccess(null);
+    try {
+      const response = await privateApi.put<BilimBindingUpdateResponse>("/api/profile/bilimclass", {
+        login: login.trim(),
+        password,
+      });
+      setStatus(response.data);
+      setPassword("");
+      setLogin(response.data.login ?? login.trim());
+      setSuccess(
+        response.data.accountName
+          ? `${t("k_360")}: ${response.data.accountName}`
+          : t("k_360"),
+      );
+    } catch (err) {
+      setFormError(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setUnlinking(true);
+    setFormError(null);
+    setSuccess(null);
+    try {
+      const response = await privateApi.delete<BilimBindingStatusResponse>("/api/profile/bilimclass");
+      setStatus(response.data);
+      setPassword("");
+      setSuccess(t("k_361"));
+    } catch (err) {
+      setFormError(getErrorMessage(err));
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
+  return (
+    <section className="section-card profile-bilim-card">
+      <div className="section-head">
+        <h3>{t("k_355")}</h3>
+        <span className={status?.linked ? "chip good" : "chip"}>
+          {status?.linked ? t("k_356") : t("k_357")}
+        </span>
+      </div>
+      <p className="profile-bilim-sub">{t("k_358")}</p>
+
+      {status?.linked ? (
+        <div className="profile-bilim-meta">
+          <span className="chip">{status.login ?? "-"}</span>
+          {status.linkedAt ? (
+            <span className="muted-inline">
+              {t("k_331")}: {formatDate(status.linkedAt, lang)}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <DataState loading={loading} error={loadError} onRetry={loadStatus} />
+
+      {!loading ? (
+        <form className="admin-form profile-bilim-form" onSubmit={submit}>
+          <label>
+            {t("k_067")}
+            <input
+              type="text"
+              value={login}
+              onChange={(event) => setLogin(event.target.value)}
+              placeholder="student@bilimclass.kz"
+              autoComplete="username"
+              required
+            />
+          </label>
+          <label>
+            {t("k_188")}
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+
+          <div className="action-row">
+            <button className="solid-button" type="submit" disabled={saving || unlinking}>
+              {saving ? t("k_151") : status?.linked ? t("k_359") : t("k_362")}
+            </button>
+            {status?.linked ? (
+              <button className="outline-button" type="button" onClick={disconnect} disabled={saving || unlinking}>
+                {unlinking ? t("k_151") : t("k_361")}
+              </button>
+            ) : null}
+          </div>
+
+          {formError ? <p className="form-error">{formError}</p> : null}
+          {success ? <p className="success-text">{success}</p> : null}
+        </form>
+      ) : null}
+    </section>
   );
 }
 
@@ -387,11 +531,14 @@ export function ProfilePage() {
     <PageTransition>
       <div className="page-layout profile-page">
         {user ? (
-          targetStudentId ? (
-            <StudentProfilePanel studentId={targetStudentId} isOwn={!routeStudentId} />
-          ) : (
-            <SelfRoleProfile user={user} />
-          )
+          <>
+            {!routeStudentId ? <BilimClassBindingCard /> : null}
+            {targetStudentId ? (
+              <StudentProfilePanel studentId={targetStudentId} isOwn={!routeStudentId} />
+            ) : (
+              <SelfRoleProfile user={user} />
+            )}
+          </>
         ) : null}
       </div>
     </PageTransition>

@@ -11,6 +11,14 @@ export type SafeUser = {
   name: string;
   classId?: string;
   linkedStudentId?: string;
+  bilimLinked?: boolean;
+  bilimLogin?: string;
+  bilimLinkedAt?: string;
+  bilimSchoolId?: number;
+  bilimGroupId?: number;
+  bilimEduYear?: number;
+  bilimPeriod?: number;
+  bilimPeriodType?: string;
 };
 
 export type Achievement = {
@@ -418,6 +426,22 @@ export type LoginResponse = {
 
 export type ProfileResponse = {
   user: SafeUser;
+};
+
+export type BilimBindingStatusResponse = {
+  provider: "BilimClass";
+  linked: boolean;
+  login: string | null;
+  linkedAt: string | null;
+  schoolId?: number | null;
+  groupId?: number | null;
+  eduYear?: number | null;
+  period?: number | null;
+  periodType?: string | null;
+};
+
+export type BilimBindingUpdateResponse = BilimBindingStatusResponse & {
+  accountName?: string | null;
 };
 
 export type StudentProfileCardResponse = {

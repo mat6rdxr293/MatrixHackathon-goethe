@@ -48,6 +48,14 @@ const mapUser = (row) => ({
     name: row.name,
     classId: row.class_id ?? undefined,
     linkedStudentId: row.linked_student_id ?? undefined,
+    bilimLinked: Boolean(row.bilim_login && row.bilim_password),
+    bilimLogin: row.bilim_login ?? undefined,
+    bilimLinkedAt: row.bilim_linked_at ?? undefined,
+    bilimSchoolId: row.bilim_school_id ?? undefined,
+    bilimGroupId: row.bilim_group_id ?? undefined,
+    bilimEduYear: row.bilim_edu_year ?? undefined,
+    bilimPeriod: row.bilim_period ?? undefined,
+    bilimPeriodType: row.bilim_period_type ?? undefined,
 });
 const mapClass = (row) => ({
     id: row.id,
@@ -112,6 +120,14 @@ const initializeSchema = () => {
   `);
     ensureColumn("events", "target_roles", "TEXT");
     ensureColumn("events", "target_class_ids", "TEXT");
+    ensureColumn("users", "bilim_login", "TEXT");
+    ensureColumn("users", "bilim_password", "TEXT");
+    ensureColumn("users", "bilim_linked_at", "TEXT");
+    ensureColumn("users", "bilim_school_id", "INTEGER");
+    ensureColumn("users", "bilim_group_id", "INTEGER");
+    ensureColumn("users", "bilim_edu_year", "INTEGER");
+    ensureColumn("users", "bilim_period", "INTEGER");
+    ensureColumn("users", "bilim_period_type", "TEXT");
 };
 initializeSchema();
 exports.storageService = {
@@ -120,21 +136,85 @@ exports.storageService = {
     },
     getUsers() {
         const rows = db
-            .prepare("SELECT id, role, email, password, name, class_id, linked_student_id, created_at FROM users ORDER BY created_at ASC")
+            .prepare("SELECT id, role, email, password, name, class_id, linked_student_id, bilim_login, bilim_password, bilim_linked_at, bilim_school_id, bilim_group_id, bilim_edu_year, bilim_period, bilim_period_type, created_at FROM users ORDER BY created_at ASC")
             .all();
         return rows.map(mapUser);
     },
     getUserById(id) {
         const row = db
-            .prepare("SELECT id, role, email, password, name, class_id, linked_student_id, created_at FROM users WHERE id = ?")
+            .prepare("SELECT id, role, email, password, name, class_id, linked_student_id, bilim_login, bilim_password, bilim_linked_at, bilim_school_id, bilim_group_id, bilim_edu_year, bilim_period, bilim_period_type, created_at FROM users WHERE id = ?")
             .get(id);
         return row ? mapUser(row) : undefined;
     },
     getUserByEmail(email) {
         const row = db
-            .prepare("SELECT id, role, email, password, name, class_id, linked_student_id, created_at FROM users WHERE email = ?")
+            .prepare("SELECT id, role, email, password, name, class_id, linked_student_id, bilim_login, bilim_password, bilim_linked_at, bilim_school_id, bilim_group_id, bilim_edu_year, bilim_period, bilim_period_type, created_at FROM users WHERE email = ?")
             .get(email);
         return row ? mapUser(row) : undefined;
+    },
+    getBilimBinding(userId) {
+        const row = db
+            .prepare("SELECT bilim_login, bilim_password, bilim_linked_at, bilim_school_id, bilim_group_id, bilim_edu_year, bilim_period, bilim_period_type FROM users WHERE id = ?")
+            .get(userId);
+        if (!row) {
+            return null;
+        }
+        const linked = Boolean(row.bilim_login && row.bilim_password);
+        return {
+            linked,
+            login: row.bilim_login ?? null,
+            linkedAt: row.bilim_linked_at ?? null,
+            schoolId: row.bilim_school_id ?? null,
+            groupId: row.bilim_group_id ?? null,
+            eduYear: row.bilim_edu_year ?? null,
+            period: row.bilim_period ?? null,
+            periodType: row.bilim_period_type ?? null,
+        };
+    },
+    setBilimBinding(userId, payload) {
+        const existing = this.getBilimBinding(userId);
+        const schoolId = payload.schoolId === undefined ? (existing?.schoolId ?? null) : payload.schoolId;
+        const groupId = payload.groupId === undefined ? (existing?.groupId ?? null) : payload.groupId;
+        const eduYear = payload.eduYear === undefined ? (existing?.eduYear ?? null) : payload.eduYear;
+        const period = payload.period === undefined ? (existing?.period ?? null) : payload.period;
+        const periodType = payload.periodType === undefined ? (existing?.periodType ?? null) : (payload.periodType?.trim() || null);
+        const linkedAt = new Date().toISOString();
+        db.prepare(`UPDATE users
+       SET bilim_login = ?, bilim_password = ?, bilim_linked_at = ?,
+           bilim_school_id = ?, bilim_group_id = ?, bilim_edu_year = ?, bilim_period = ?, bilim_period_type = ?
+       WHERE id = ?`).run(payload.login.trim(), payload.password, linkedAt, schoolId, groupId, eduYear, period, periodType, userId);
+        return this.getBilimBinding(userId);
+    },
+    clearBilimBinding(userId) {
+        db.prepare(`UPDATE users
+       SET bilim_login = NULL, bilim_password = NULL, bilim_linked_at = NULL,
+           bilim_school_id = NULL, bilim_group_id = NULL, bilim_edu_year = NULL, bilim_period = NULL, bilim_period_type = NULL
+       WHERE id = ?`).run(userId);
+        return this.getBilimBinding(userId);
+    },
+    listBilimLinkedUsers() {
+        const rows = db
+            .prepare(`SELECT
+          id, role, name, class_id, linked_student_id,
+          bilim_login, bilim_password, bilim_school_id, bilim_group_id, bilim_edu_year, bilim_period, bilim_period_type
+        FROM users
+        WHERE bilim_login IS NOT NULL AND bilim_login <> ''
+          AND bilim_password IS NOT NULL AND bilim_password <> ''`)
+            .all();
+        return rows.map((row) => ({
+            userId: row.id,
+            role: row.role,
+            name: row.name,
+            classId: row.class_id ?? null,
+            linkedStudentId: row.linked_student_id ?? null,
+            login: row.bilim_login,
+            password: row.bilim_password,
+            schoolId: row.bilim_school_id ?? null,
+            groupId: row.bilim_group_id ?? null,
+            eduYear: row.bilim_edu_year ?? null,
+            period: row.bilim_period ?? null,
+            periodType: row.bilim_period_type ?? null,
+        }));
     },
     createUser(payload) {
         const id = `${payload.role}-${(0, node_crypto_1.randomUUID)().slice(0, 8)}`;
@@ -152,11 +232,31 @@ exports.storageService = {
             linked_student_id: payload.linkedStudentId ?? null,
             created_at: createdAt,
         });
+        if (payload.role === "student" && !payload.linkedStudentId) {
+            db.prepare("UPDATE users SET linked_student_id = ? WHERE id = ?").run(id, id);
+        }
         const created = this.getUserById(id);
         if (!created) {
             throw new Error("Unable to create user");
         }
         return created;
+    },
+    updateUserPassword(userId, password) {
+        const normalizedPassword = password.trim();
+        if (normalizedPassword.length < 6) {
+            throw new Error("Password must be at least 6 characters");
+        }
+        const result = db.prepare("UPDATE users SET password = ? WHERE id = ?").run(normalizedPassword, userId);
+        return result.changes > 0;
+    },
+    deleteUserById(userId) {
+        const tx = db.transaction((targetUserId) => {
+            db.prepare("UPDATE classes SET teacher_id = NULL WHERE teacher_id = ?").run(targetUserId);
+            db.prepare("UPDATE users SET linked_student_id = NULL WHERE linked_student_id = ?").run(targetUserId);
+            const result = db.prepare("DELETE FROM users WHERE id = ?").run(targetUserId);
+            return result.changes > 0;
+        });
+        return tx(userId);
     },
     listClasses() {
         const rows = db

@@ -969,6 +969,31 @@
   padding: 0.55rem 0.72rem;
 }
 
+.users-search {
+  min-width: min(360px, 100%);
+  flex: 1 1 280px;
+}
+
+.users-search input {
+  width: 100%;
+}
+
+.users-table-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+.outline-button.danger {
+  border-color: #efb2aa;
+  color: #9e3f35;
+  background: #fff7f6;
+}
+
+.outline-button.danger:hover {
+  border-color: #e58c82;
+  background: #ffeceb;
+}
+
 .users-modal-backdrop {
   position: fixed;
   inset: 0;

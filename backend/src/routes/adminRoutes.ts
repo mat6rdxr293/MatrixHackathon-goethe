@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware, requireRoles } from "../middleware/auth";
 import { analyticsService } from "../services/analyticsService";
+import { academicStoreService } from "../services/academicStoreService";
 import { notificationService } from "../services/notificationService";
 import { scheduleService } from "../services/scheduleService";
 import { scheduleStoreService } from "../services/scheduleStoreService";
@@ -34,6 +35,10 @@ const userSchema = z.object({
   name: z.string().trim().min(2),
   classId: z.string().trim().min(2).max(12).optional(),
   linkedStudentId: z.string().trim().min(2).optional(),
+});
+
+const userPasswordSchema = z.object({
+  password: z.string().trim().min(6).max(120),
 });
 
 const lessonRequirementSchema = z.object({
@@ -160,11 +165,93 @@ adminRoutes.post("/users", (req, res) => {
       storageService.assignTeacherToClass(payload.classId, user.id);
     }
 
+    if (payload.role === "student") {
+      const studentId = user.linkedStudentId ?? user.id;
+      academicStoreService.upsertStudentProfiles([
+        {
+          studentId,
+          fullName: user.name,
+          classId: user.classId ?? payload.classId ?? "—",
+          averageScore: 0,
+          weakSubjects: [],
+          progress: [],
+        },
+      ]);
+    }
+
     const { password: _password, ...safeUser } = user;
     res.status(201).json(safeUser);
   } catch {
     res.status(500).json({ message: "Не удалось создать пользователя" });
   }
+});
+
+adminRoutes.patch("/users/:userId/password", (req, res) => {
+  const userId = (req.params.userId ?? "").trim();
+  if (!userId) {
+    res.status(400).json({ message: "Нужно указать пользователя" });
+    return;
+  }
+
+  const parsed = userPasswordSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Неверные данные запроса", errors: parsed.error.flatten() });
+    return;
+  }
+
+  const targetUser = storageService.getUserById(userId);
+  if (!targetUser) {
+    res.status(404).json({ message: "Пользователь не найден" });
+    return;
+  }
+
+  try {
+    const updated = storageService.updateUserPassword(userId, parsed.data.password);
+    if (!updated) {
+      res.status(404).json({ message: "Пользователь не найден" });
+      return;
+    }
+
+    res.json({ message: "Пароль обновлён" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Не удалось обновить пароль";
+    res.status(400).json({ message });
+  }
+});
+
+adminRoutes.delete("/users/:userId", (req, res) => {
+  const userId = (req.params.userId ?? "").trim();
+  if (!userId) {
+    res.status(400).json({ message: "Нужно указать пользователя" });
+    return;
+  }
+
+  const targetUser = storageService.getUserById(userId);
+  if (!targetUser) {
+    res.status(404).json({ message: "Пользователь не найден" });
+    return;
+  }
+
+  if (req.user?.id === userId) {
+    res.status(400).json({ message: "Нельзя удалить собственный аккаунт" });
+    return;
+  }
+
+  if (targetUser.role === "admin") {
+    const admins = storageService.getUsers().filter((user) => user.role === "admin");
+    if (admins.length <= 1) {
+      res.status(400).json({ message: "Нельзя удалить последнего администратора" });
+      return;
+    }
+  }
+
+  const deleted = storageService.deleteUserById(userId);
+  if (!deleted) {
+    res.status(404).json({ message: "Пользователь не найден" });
+    return;
+  }
+
+  res.json({ message: "Аккаунт удалён" });
 });
 
 adminRoutes.get("/classes", async (_req, res) => {

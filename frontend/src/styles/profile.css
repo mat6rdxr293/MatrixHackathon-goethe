@@ -122,6 +122,28 @@
   gap: 0.75rem;
 }
 
+.profile-bilim-card {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.profile-bilim-sub {
+  margin: -0.4rem 0 0;
+  color: var(--text3);
+  font-size: 12px;
+}
+
+.profile-bilim-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.profile-bilim-form {
+  margin-top: 0;
+}
+
 .profile-back {
   width: fit-content;
 }
