@@ -1,12 +1,12 @@
-# Aqbobek Lyceum Portal (MVP)
+# MatrixEducation Portal (MVP)
 
-Современный единый школьный портал для **Aqbobek Lyceum**, который объединяет учебный процесс, аналитику, достижения, события и AI-инструменты в одной системе.
+Современный единый школьный портал для **MatrixEducation**, который объединяет учебный процесс, аналитику, достижения, события и AI-инструменты в одной системе.
 
 ---
 
 ## О проекте
 
-**Aqbobek Lyceum Portal** — это MVP единой цифровой школьной платформы с поддержкой нескольких ролей:
+**MatrixEducation Portal** — это MVP единой цифровой школьной платформы с поддержкой нескольких ролей:
 
 - **ученик**
 - **учитель**
@@ -155,35 +155,33 @@ AI-блок в системе может использоваться для:
 
 ---
 
-## Быстрый запуск
+## Быстрый запуск (Windows)
 
-## Вариант A — запуск через `.bat`-скрипты (Windows)
-
-### 1. Установка проекта
 ```bat
-setup_project.bat
+setup_project.bat   # установка зависимостей
+start_dev.bat       # запуск в dev-режиме
+start_prod.bat      # запуск в prod-режиме
 ```
 
 ## Аккаунты
-Используйте их для входа в аккаунт:
 
 | Роль | Логин (email) | Пароль |
 |---|---|---|
-| Админ | `admin@aqbobek.edu` | `admin123` |
-| Учитель | `teacher@aqbobek.edu` | `teacher123` |
-| Родитель | `parent@aqbobek.edu` | `parent123` |
-| Ученик | `student@aqbobek.edu` | `student123` |
-| Ученик | `student2@aqbobek.edu` | `student123` |
+| Админ | `admin@matrix.edu` | `admin123` |
+| Учитель | `teacher@matrix.edu` | `teacher123` |
+| Родитель | `parent@matrix.edu` | `parent123` |
+| Ученик | `student@matrix.edu` | `student123` |
+| Ученик | `student2@matrix.edu` | `student123` |
 
 ---
 
 ## LLM Fallback Chain (OpenAI -> Local LLM -> Demo)
 
-The project now uses a 3-step AI pipeline:
+Проект использует 3-уровневый AI-пайплайн:
 
-1. OpenAI API (primary)
-2. Local Python LLM service (fallback)
-3. Deterministic demo answers from internal analytics (final fallback)
+1. **OpenAI API** — основной
+2. **Local Python LLM** (`local_llm/`, порт `8009`) — fallback
+3. **Детерминированные demo-ответы** из внутренней аналитики — финальный fallback
 
 ### Local LLM service
 
@@ -193,33 +191,16 @@ The project now uses a 3-step AI pipeline:
   - `GET /health`
   - `POST /v1/generate`
 
-### Setup
-
-Run once:
-
-```bat
-setup_project.bat
-```
-
-This now does all of the following:
-- installs backend/frontend npm dependencies
-- creates `local_llm/.venv`
-- installs Python dependencies for local LLM
-- detects hardware profile (CPU/CUDA)
-- downloads local model for fallback
-
-### Launch
+### Запуск
 
 - Dev: `start_dev.bat`
 - Prod: `start_prod.bat`
 
-Both scripts now try to start local LLM automatically and pass `LOCAL_LLM_URL` to backend.
+Оба скрипта автоматически запускают local LLM и передают `LOCAL_LLM_URL` в бэкенд.
 
-### AI mode in API
+### AI mode в API
 
-AI responses now expose the actual mode:
+AI-ответы возвращают актуальный режим:
 - `openai`
 - `local`
 - `demo`
-
-So UI can show exactly where the answer came from.
