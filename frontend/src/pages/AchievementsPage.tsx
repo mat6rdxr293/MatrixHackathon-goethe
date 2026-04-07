@@ -91,7 +91,7 @@ export function AchievementsPage() {
     setSubmitMessage(null);
 
     if (title.trim().length < 2) {
-      setFormError(t("k_149"));
+      setFormError(t("title"));
       return;
     }
 
@@ -118,7 +118,7 @@ export function AchievementsPage() {
 
       if (proofFile) {
         if (proofFile.size > MAX_PROOF_FILE_SIZE) {
-          setFormError(t("k_352"));
+          setFormError(t("file_more_2_mb"));
           setSubmitting(false);
           return;
         }
@@ -133,7 +133,7 @@ export function AchievementsPage() {
       await privateApi.post("/api/achievements", {
         title: title.trim(),
         type,
-        badge: badge.trim() || t("k_014"),
+        badge: badge.trim() || t("achievements"),
         proofUrl: referenceIsUrl ? normalizedReference : undefined,
         proofNote: mergedProofNote || undefined,
         proofAttachment,
@@ -143,7 +143,7 @@ export function AchievementsPage() {
       setProofReference("");
       setProofNote("");
       setProofFile(null);
-      setSubmitMessage(t("k_191"));
+      setSubmitMessage(t("account_successfully_created"));
       setSubmitModalOpen(false);
       await refresh();
     } catch (submissionError) {
@@ -192,8 +192,8 @@ export function AchievementsPage() {
             {canSubmit ? (
               <section className="users-actions-card content-compose-actions">
                 <div className="users-actions-copy">
-                  <h3>{t("k_146")}</h3>
-                  <p>{t("k_110")}</p>
+                  <h3>{t("new_content")}</h3>
+                  <p>{t("cards_achievements")}</p>
                 </div>
                 <button
                   className="solid-button content-compose-open"
@@ -204,7 +204,7 @@ export function AchievementsPage() {
                     setSubmitModalOpen(true);
                   }}
                 >
-                  {t("k_146")}
+                  {t("new_content")}
                 </button>
               </section>
             ) : null}
@@ -221,7 +221,7 @@ export function AchievementsPage() {
 
                 <aside className={isSubmitModalOpen ? "users-modal content-compose-modal open" : "users-modal content-compose-modal"}>
                   <header className="users-modal-head">
-                    <h3>{t("k_146")}</h3>
+                    <h3>{t("new_content")}</h3>
                     <button className="icon-btn users-modal-close" type="button" onClick={() => setSubmitModalOpen(false)}>
                       <X size={18} />
                     </button>
@@ -229,11 +229,11 @@ export function AchievementsPage() {
 
                   <form className="admin-form content-compose-form" onSubmit={submitAchievement}>
                     <label>
-                      {t("k_149")}
+                      {t("title")}
                       <input value={title} onChange={(event) => setTitle(event.target.value)} required />
                     </label>
                     <label>
-                      {t("k_147")}
+                      {t("type")}
                       <select value={type} onChange={(event) => setType(event.target.value as AchievementType)}>
                         {(["academic", "sport", "creative", "social"] as AchievementType[]).map((entryType) => (
                           <option key={entryType} value={entryType}>
@@ -243,11 +243,11 @@ export function AchievementsPage() {
                       </select>
                     </label>
                     <label>
-                      {t("k_055")}
+                      {t("successes")}
                       <input value={badge} onChange={(event) => setBadge(event.target.value)} />
                     </label>
                     <label>
-                      {t("k_348")}
+                      {t("link_or_text")}
                       <input
                         type="text"
                         placeholder="https://"
@@ -256,7 +256,7 @@ export function AchievementsPage() {
                       />
                     </label>
                     <label>
-                      {t("k_349")}
+                      {t("attachment")}
                       <input
                         type="file"
                         accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.txt"
@@ -264,23 +264,23 @@ export function AchievementsPage() {
                       />
                     </label>
                     <label>
-                      {t("k_150")}
+                      {t("description")}
                       <textarea value={proofNote} onChange={(event) => setProofNote(event.target.value)} />
                     </label>
                     {proofFile ? (
                       <div className="chip-row">
                         <span className="chip good">
-                          {t("k_351")}: {proofFile.name}
+                          {t("file_attached")}: {proofFile.name}
                         </span>
                         <button className="outline-button" type="button" onClick={() => setProofFile(null)}>
-                          {t("k_350")}
+                          {t("remove_file")}
                         </button>
                       </div>
                     ) : null}
                     {formError ? <p className="form-error">{formError}</p> : null}
                     {submitMessage ? <p className="success-text">{submitMessage}</p> : null}
                     <button className="solid-button content-publish-button" type="submit" disabled={submitting}>
-                      {submitting ? `${t("k_151")}...` : t("k_152")}
+                      {submitting ? `${t("publishing")}...` : t("publish")}
                     </button>
                   </form>
                 </aside>
@@ -294,7 +294,7 @@ export function AchievementsPage() {
                   type="button"
                   onClick={() => setFilter("all")}
                 >
-                  {t("k_109")}
+                  {t("all")}
                 </button>
                 {(["academic", "sport", "creative", "social"] as AchievementType[]).map((entryType) => (
                   <button
@@ -315,13 +315,13 @@ export function AchievementsPage() {
                     type="button"
                     onClick={() => setVerificationFilter(status)}
                   >
-                    {status === "all" ? t("k_109") : status === "verified" ? t("k_324") : t("k_325")}
+                    {status === "all" ? t("all") : status === "verified" ? t("verified") : t("for_pending")}
                   </button>
                 ))}
               </div>
             </div>
 
-            <Section title={t("k_110")}>
+            <Section title={t("cards_achievements")}>
               <div className="list-grid">
                 {filtered.map((item) => (
                   <article key={item.id} className="mini-card">
@@ -334,7 +334,7 @@ export function AchievementsPage() {
                       <div className="mini-proof">
                         {item.proofUrl ? (
                           <a href={item.proofUrl} target="_blank" rel="noreferrer">
-                            {t("k_328")}
+                            {t("proof")}
                           </a>
                         ) : null}
                         {item.proofAttachment ? (
@@ -347,11 +347,11 @@ export function AchievementsPage() {
                     ) : null}
                     <div className="chip-row">
                       <span className={item.verification?.status === "verified" ? "chip good" : "chip warn"}>
-                        {item.verification?.status === "verified" ? t("k_324") : t("k_325")}
+                        {item.verification?.status === "verified" ? t("verified") : t("for_pending")}
                       </span>
                       {item.verification?.verifiedBy ? (
                         <span className="chip">
-                          {t("k_326")}: {item.verification.verifiedBy}
+                          {t("verified_by")}: {item.verification.verifiedBy}
                         </span>
                       ) : null}
                       {canVerify && item.verification?.status !== "verified" ? (
@@ -367,7 +367,7 @@ export function AchievementsPage() {
                           }
                         >
                           <CheckCircle2 size={14} />
-                          {verifyingId === item.id ? `${t("k_129")}...` : t("k_129")}
+                          {verifyingId === item.id ? `${t("refresh_status")}...` : t("refresh_status")}
                         </button>
                       ) : null}
                     </div>
@@ -380,7 +380,7 @@ export function AchievementsPage() {
               </div>
             </Section>
 
-            <Section title={t("k_111")}>
+            <Section title={t("rating")}>
               {podium.length >= 3 ? (
                 <div className="leaderboard-podium">
                   {podium.map((entry) => (
@@ -405,11 +405,11 @@ export function AchievementsPage() {
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>{t("k_001")}</th>
-                    <th>{t("k_071")}</th>
-                    <th>{t("k_014")}</th>
-                    <th>{t("k_323")}</th>
-                    <th>{t("k_045")}</th>
+                    <th>{t("student")}</th>
+                    <th>{t("average_score")}</th>
+                    <th>{t("achievements")}</th>
+                    <th>{t("verification")}</th>
+                    <th>{t("view_features")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -433,12 +433,12 @@ export function AchievementsPage() {
                         {row.rank === 1 ? (
                           <span className="chip good">
                             <Crown size={13} />
-                            {t("k_243")}
+                            {t("leader")}
                           </span>
                         ) : row.rank <= 3 ? (
                           <span className="chip good">
                             <Award size={13} />
-                            {t("k_244")} {row.rank}
+                            {t("top")} {row.rank}
                           </span>
                         ) : (
                           <span className="chip">#{row.rank}</span>
@@ -450,7 +450,7 @@ export function AchievementsPage() {
                           const status = achievement?.verification?.status ?? "pending";
                           return (
                             <span className={status === "verified" ? "chip good" : "chip warn"}>
-                              {status === "verified" ? t("k_324") : t("k_325")}
+                              {status === "verified" ? t("verified") : t("for_pending")}
                             </span>
                           );
                         })()}
@@ -462,7 +462,7 @@ export function AchievementsPage() {
                           onClick={() => navigate(`/app/students/${row.studentId}`)}
                         >
                           <Trophy size={14} />
-                          {t("k_245")}
+                          {t("profile_2")}
                         </button>
                       </td>
                     </tr>

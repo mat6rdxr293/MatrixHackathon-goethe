@@ -35,11 +35,11 @@ export function KioskPage() {
         <div className="kiosk-toolbar">
           <Link className="outline-button link-button icon-button" to="/app/dashboard">
             <Tv size={16} />
-            {t("k_154")}
+            {t("back_in_room")}
           </Link>
           <button className="outline-button icon-button" type="button" onClick={() => setAutoplay((prev) => !prev)}>
             {autoplay ? <Pause size={16} /> : <Play size={16} />}
-            {autoplay ? t("k_155") : t("k_156")}
+            {autoplay ? t("pause") : t("auto_scroll")}
           </button>
           <LanguageSwitch />
         </div>
@@ -55,7 +55,7 @@ export function KioskPage() {
 
             {slide === 0 ? (
               <section className="kiosk-panel">
-                <h2>{t("k_157")}</h2>
+                <h2>{t("main_achievements")}</h2>
                 <div className="kiosk-cards">
                   {data.achievements.slice(0, 3).map((item) => (
                     <article key={item.id} className="kiosk-card">
@@ -70,7 +70,7 @@ export function KioskPage() {
 
             {slide === 1 ? (
               <section className="kiosk-panel">
-                <h2>{t("k_024")}</h2>
+                <h2>{t("news_and_events")}</h2>
                 <div className="kiosk-cards">
                   {data.news.concat(data.upcomingEvents).map((item) => (
                     <article key={item.id} className="kiosk-card">
@@ -85,13 +85,13 @@ export function KioskPage() {
 
             {slide === 2 ? (
               <section className="kiosk-panel">
-                <h2>{t("k_158")}</h2>
+                <h2>{t("top_students_and_classes")}</h2>
                 <table className="data-table kiosk-table">
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>{t("k_126")}</th>
-                      <th>{t("k_071")}</th>
+                      <th>{t("name")}</th>
+                      <th>{t("average_score")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -109,7 +109,7 @@ export function KioskPage() {
 
             {slide === 3 ? (
               <section className="kiosk-panel">
-                <h2>{t("k_159")}</h2>
+                <h2>{t("main_events_school")}</h2>
                 <ul className="kiosk-list">
                   {data.schoolHighlights.map((item) => (
                     <li key={item}>{item}</li>
@@ -120,14 +120,14 @@ export function KioskPage() {
 
             {slide === 4 && data.scheduleUpdates && data.scheduleUpdates.length > 0 ? (
               <section className="kiosk-panel">
-                <h2>{t("k_226")}</h2>
+                <h2>{t("current_replacements")}</h2>
                 <table className="data-table kiosk-table">
                   <thead>
                     <tr>
-                      <th>{t("k_083")}</th>
-                      <th>{t("k_208")}</th>
-                      <th>{t("k_090")}</th>
-                      <th>{t("k_103")}</th>
+                      <th>{t("class")}</th>
+                      <th>{t("lesson")}</th>
+                      <th>{t("subject")}</th>
+                      <th>{t("status")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -138,9 +138,9 @@ export function KioskPage() {
                         <td>{item.subject}</td>
                         <td>
                           {item.status === "changed" ? (
-                            <span className="chip warn">{t("k_206")}</span>
+                            <span className="chip warn">{t("replacement")}</span>
                           ) : (
-                            <span className="chip bad">{t("k_207")}</span>
+                            <span className="chip bad">{t("cancelled")}</span>
                           )}
                         </td>
                       </tr>

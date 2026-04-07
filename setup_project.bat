@@ -5,7 +5,7 @@ set "ROOT=%~dp0"
 cd /d "%ROOT%"
 
 echo ============================================
-echo Aqbobek Lyceum Portal - Setup
+echo Matrix Education - Setup
 echo ============================================
 echo.
 
@@ -52,6 +52,75 @@ if errorlevel 1 (
 popd >nul
 echo [OK] Dependencies installed in frontend.
 echo.
+
+echo [INFO] Installing dependencies in practice-module\frontend...
+if exist "%ROOT%practice-module\frontend\package.json" (
+  pushd "%ROOT%practice-module\frontend" >nul
+  call npm.cmd install
+  if errorlevel 1 (
+    echo [WARN] npm install failed in practice-module\frontend. Continuing.
+  ) else (
+    echo [OK] Dependencies installed in practice-module\frontend.
+  )
+  popd >nul
+) else (
+  echo [WARN] practice-module\frontend\package.json not found, skipping.
+)
+echo.
+
+echo [INFO] Preparing practice-module Python backend...
+set "PM_DIR=%ROOT%practice-module"
+set "PM_VENV=%PM_DIR%\.venv"
+set "PM_PY=%PM_VENV%\Scripts\python.exe"
+
+if not exist "%PM_DIR%\backend\requirements.txt" (
+  echo [WARN] practice-module\backend\requirements.txt not found, skipping.
+  goto :pm_venv_done
+)
+
+if exist "%PM_PY%" (
+  "%PM_PY%" -c "import sys" >nul 2>&1
+  if errorlevel 1 (
+    echo [INFO] Broken .venv detected in practice-module. Recreating...
+    rmdir /s /q "%PM_VENV%"
+  )
+)
+if not exist "%PM_PY%" (
+  echo [INFO] Creating virtualenv for practice-module...
+  python -m venv "%PM_VENV%"
+  if errorlevel 1 (
+    echo [ERROR] Failed to create practice-module virtualenv.
+    goto :fail
+  )
+)
+
+echo [INFO] Upgrading pip in practice-module venv...
+call "%PM_PY%" -m pip install --upgrade pip setuptools wheel
+if errorlevel 1 (
+  echo [WARN] pip upgrade failed in practice-module venv. Continuing.
+)
+
+echo [INFO] Installing practice-module Python dependencies...
+call "%PM_PY%" -m pip install -r "%PM_DIR%\backend\requirements.txt"
+if errorlevel 1 (
+  echo [ERROR] Failed to install practice-module requirements.
+  goto :fail
+)
+
+if not exist "%PM_DIR%\backend\.env" (
+  if exist "%PM_DIR%\backend\.env.example" (
+    copy /y "%PM_DIR%\backend\.env.example" "%PM_DIR%\backend\.env" >nul
+    echo [OK] Created practice-module\backend\.env from .env.example
+  ) else (
+    echo [WARN] practice-module\backend\.env.example not found.
+  )
+) else (
+  echo [INFO] practice-module\backend\.env already exists, skipping.
+)
+echo [OK] practice-module Python backend is prepared.
+echo.
+
+:pm_venv_done
 
 for %%D in (backend frontend) do (
   if exist "%ROOT%%%D\.env" (

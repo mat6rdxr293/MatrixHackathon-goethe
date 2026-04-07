@@ -38,14 +38,14 @@ const defaultPlannerWeights: PlannerWeights = {
 const plannerPresetConfigs: PlannerPresetConfig[] = [
   {
     id: "balanced",
-    titleKey: "k_342",
-    descriptionKey: "k_343",
+    titleKey: "analysis_preset_balanced",
+    descriptionKey: "balanced_considers_load_comfort_and_risks",
     weights: defaultPlannerWeights,
   },
   {
     id: "risk",
-    titleKey: "k_344",
-    descriptionKey: "k_345",
+    titleKey: "analysis_preset_risk",
+    descriptionKey: "detects_gaps_overload_and_problematic_slots",
     weights: {
       classDailyLoad: 1.2,
       teacherDailyLoad: 1.2,
@@ -61,8 +61,8 @@ const plannerPresetConfigs: PlannerPresetConfig[] = [
   },
   {
     id: "development",
-    titleKey: "k_346",
-    descriptionKey: "k_347",
+    titleKey: "analysis_preset_comfort",
+    descriptionKey: "prioritizes_in_priority_even_pace_and_comfortable_distribution_at",
     weights: {
       classDailyLoad: 1.7,
       teacherDailyLoad: 1.7,

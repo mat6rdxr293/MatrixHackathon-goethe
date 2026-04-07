@@ -23,6 +23,36 @@ export type GradePoint = {
   score: number;
 };
 
+export type JournalGradeRow = {
+  id: string;
+  studentId: string;
+  eduYear: number;
+  period: number;
+  periodType: string;
+  subjectId?: number;
+  subjectUuid?: string;
+  subjectName: string;
+  scheduleUuid?: string;
+  lessonDate: string;
+  lessonTime?: string;
+  markType?: string;
+  markMax?: number;
+  scoreRaw: string;
+  scoreFive?: number;
+  syncedAt: string;
+};
+
+export type JournalFilterScope = {
+  eduYear: number;
+  period: number;
+  periodType: string;
+};
+
+export type JournalScopeInfo = JournalFilterScope & {
+  lastSyncedAt: string;
+  gradesCount: number;
+};
+
 export type SubjectProgress = {
   subject: string;
   current: number;
@@ -131,3 +161,134 @@ export type TeacherAbsence = {
   reason?: string;
   createdAt: string;
 };
+
+export type SubjectPracticeQuestionType =
+  | "single_choice"
+  | "multiple_choice"
+  | "short_answer"
+  | "matching"
+  | "ordering";
+
+export type SubjectPracticeOption = {
+  id: string;
+  text: string;
+};
+
+export type SubjectPracticePair = {
+  leftId: string;
+  rightId: string;
+};
+
+export type SubjectPracticeQuestionBase = {
+  id: string;
+  subject: string;
+  prompt: string;
+  explanation?: string;
+  sortOrder: number;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SubjectPracticeSingleChoiceQuestion = SubjectPracticeQuestionBase & {
+  type: "single_choice";
+  options: SubjectPracticeOption[];
+  correctOptionId: string;
+};
+
+export type SubjectPracticeShortAnswerQuestion = SubjectPracticeQuestionBase & {
+  type: "short_answer";
+  acceptedAnswers: string[];
+};
+
+export type SubjectPracticeMultipleChoiceQuestion = SubjectPracticeQuestionBase & {
+  type: "multiple_choice";
+  options: SubjectPracticeOption[];
+  correctOptionIds: string[];
+};
+
+export type SubjectPracticeMatchingQuestion = SubjectPracticeQuestionBase & {
+  type: "matching";
+  leftItems: SubjectPracticeOption[];
+  rightItems: SubjectPracticeOption[];
+  correctPairs: SubjectPracticePair[];
+};
+
+export type SubjectPracticeOrderingQuestion = SubjectPracticeQuestionBase & {
+  type: "ordering";
+  items: SubjectPracticeOption[];
+  correctOrder: string[];
+};
+
+export type SubjectPracticeQuestion =
+  | SubjectPracticeSingleChoiceQuestion
+  | SubjectPracticeMultipleChoiceQuestion
+  | SubjectPracticeShortAnswerQuestion
+  | SubjectPracticeMatchingQuestion
+  | SubjectPracticeOrderingQuestion;
+
+export type SubjectPracticeQuestionInputBase = {
+  type: SubjectPracticeQuestionType;
+  prompt: string;
+  explanation?: string;
+  sortOrder?: number;
+};
+
+export type SubjectPracticeSingleChoiceQuestionInput = SubjectPracticeQuestionInputBase & {
+  type: "single_choice";
+  options: SubjectPracticeOption[];
+  correctOptionId: string;
+};
+
+export type SubjectPracticeShortAnswerQuestionInput = SubjectPracticeQuestionInputBase & {
+  type: "short_answer";
+  acceptedAnswers: string[];
+};
+
+export type SubjectPracticeMultipleChoiceQuestionInput = SubjectPracticeQuestionInputBase & {
+  type: "multiple_choice";
+  options: SubjectPracticeOption[];
+  correctOptionIds: string[];
+};
+
+export type SubjectPracticeMatchingQuestionInput = SubjectPracticeQuestionInputBase & {
+  type: "matching";
+  leftItems: SubjectPracticeOption[];
+  rightItems: SubjectPracticeOption[];
+  correctPairs: SubjectPracticePair[];
+};
+
+export type SubjectPracticeOrderingQuestionInput = SubjectPracticeQuestionInputBase & {
+  type: "ordering";
+  items: SubjectPracticeOption[];
+  correctOrder: string[];
+};
+
+export type SubjectPracticeQuestionInput =
+  | SubjectPracticeSingleChoiceQuestionInput
+  | SubjectPracticeMultipleChoiceQuestionInput
+  | SubjectPracticeShortAnswerQuestionInput
+  | SubjectPracticeMatchingQuestionInput
+  | SubjectPracticeOrderingQuestionInput;
+
+export type SubjectPracticeAnswerInput =
+  | {
+      type: "single_choice";
+      optionId: string;
+    }
+  | {
+      type: "multiple_choice";
+      optionIds: string[];
+    }
+  | {
+      type: "short_answer";
+      text: string;
+    }
+  | {
+      type: "matching";
+      pairs: SubjectPracticePair[];
+    }
+  | {
+      type: "ordering";
+      order: string[];
+    };

@@ -1,6 +1,7 @@
 ﻿import {
   Achievement,
   ClassOverview,
+  JournalFilterScope,
   ManagedClass,
   Role,
   StudentProfile,
@@ -18,6 +19,7 @@ import { academicStoreService } from "./academicStoreService";
 import { bilimClassService } from "./bilimClassService";
 import { generateLLMSummaryFromStructuredData } from "./llm/llmSummaryService";
 import { storageService } from "./storageService";
+import { localizeSubjectName, type SubjectLang } from "../utils/subjectNameLocalization";
 
 type SafeUser = Omit<User, "password">;
 
@@ -189,6 +191,241 @@ const getLinkedStudent = (user: SafeUser, profiles: StudentProfile[]) => {
   return undefined;
 };
 
+const localizeProfileSubjects = (profile: StudentProfile, lang: SubjectLang): StudentProfile => {
+  const localizedProgress = profile.progress.map((item) => ({
+    ...item,
+    subject: localizeSubjectName(item.subject, lang),
+  }));
+
+  const localizedWeakSubjects = profile.weakSubjects.map((item) => localizeSubjectName(item, lang));
+
+  return {
+    ...profile,
+    progress: localizedProgress,
+    weakSubjects: [...new Set(localizedWeakSubjects)],
+  };
+};
+
+const rkPercentToFivePoint = (percent: number) => {
+  const normalized = Math.max(0, Math.min(100, percent));
+  if (normalized <= 42) {
+    return 2;
+  }
+  if (normalized <= 64) {
+    return 3;
+  }
+  if (normalized <= 84) {
+    return 4;
+  }
+  return 5;
+};
+
+const toFivePointScore = (raw: string | null | undefined, markMax: number | null = null) => {
+  if (!raw) {
+    return null;
+  }
+  const normalized = raw.trim().replace(",", ".");
+  if (!normalized) {
+    return null;
+  }
+
+  const fraction = normalized.match(/(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/);
+  if (fraction) {
+    const numerator = Number(fraction[1]);
+    const denominator = Number(fraction[2]);
+    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0) {
+      return rkPercentToFivePoint((numerator / denominator) * 100);
+    }
+  }
+
+  const direct = Number(normalized.match(/-?\d+(?:\.\d+)?/)?.[0]);
+  if (!Number.isFinite(direct)) {
+    return null;
+  }
+
+  if (markMax !== null && Number.isFinite(markMax) && markMax > 0) {
+    return rkPercentToFivePoint((direct / markMax) * 100);
+  }
+
+  if (direct >= 2 && direct <= 5 && Math.abs(direct - Math.round(direct)) < 0.000001) {
+    return Math.round(direct);
+  }
+
+  let percent: number;
+  if (direct <= 5) {
+    percent = direct * 20;
+  } else if (direct <= 10) {
+    percent = direct * 10;
+  } else if (direct <= 25) {
+    percent = (direct / 25) * 100;
+  } else if (direct <= 100) {
+    percent = direct;
+  } else {
+    percent = 100;
+  }
+  return rkPercentToFivePoint(percent);
+};
+
+const toJournalTimestamp = (dateRaw: string, timeRaw?: string | null) => {
+  const date = dateRaw.trim();
+  const time = (timeRaw ?? "").trim();
+  if (!date) {
+    return Number.NaN;
+  }
+
+  const dotted = date.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (dotted) {
+    const [, day, month, year] = dotted;
+    const iso = `${year}-${month}-${day}${time ? `T${time}` : ""}`;
+    return Date.parse(iso);
+  }
+
+  const direct = Date.parse(time ? `${date} ${time}` : date);
+  return Number.isFinite(direct) ? direct : Number.NaN;
+};
+
+const buildProfileFromJournal = (
+  baseProfile: StudentProfile,
+  journal: Awaited<ReturnType<typeof bilimClassService.getStudentJournal>>,
+): StudentProfile | null => {
+  const normalizeSubjectKey = (value: string) => value.trim().toLowerCase();
+  const valuesBySubject = new Map<string, number[]>();
+  const historyBySubject = new Map<string, Array<{ date: string; score: number; timestamp: number }>>();
+  const subjectNameByKey = new Map<string, string>();
+
+  for (const subject of journal.subjects) {
+    const key = normalizeSubjectKey(subject.subjectName);
+    if (key && !subjectNameByKey.has(key)) {
+      subjectNameByKey.set(key, subject.subjectName);
+    }
+  }
+
+  for (const grade of journal.grades) {
+    const key = normalizeSubjectKey(grade.subjectName);
+    if (!key) {
+      continue;
+    }
+    if (!subjectNameByKey.has(key)) {
+      subjectNameByKey.set(key, grade.subjectName);
+    }
+    const converted =
+      typeof grade.scoreFive === "number" && Number.isFinite(grade.scoreFive)
+        ? toFivePointScore(String(grade.scoreFive))
+        : toFivePointScore(grade.scoreRaw, typeof grade.markMax === "number" ? grade.markMax : null);
+    if (converted === null || !Number.isFinite(converted)) {
+      continue;
+    }
+    const bucket = valuesBySubject.get(key) ?? [];
+    bucket.push(converted);
+    valuesBySubject.set(key, bucket);
+
+    const history = historyBySubject.get(key) ?? [];
+    history.push({
+      date: grade.lessonDate || new Date().toISOString().slice(0, 10),
+      score: Number(converted.toFixed(2)),
+      timestamp: toJournalTimestamp(grade.lessonDate ?? "", grade.lessonTime),
+    });
+    historyBySubject.set(key, history);
+  }
+
+  const summaryByKey = new Map(
+    journal.subjects.map((subject) => [normalizeSubjectKey(subject.subjectName), subject] as const),
+  );
+
+  const subjectKeys = [...subjectNameByKey.keys()];
+  const journalProgress = subjectKeys
+    .map((key) => {
+      const subjectSummary = summaryByKey.get(key);
+      const subjectName = subjectNameByKey.get(key) ?? subjectSummary?.subjectName ?? "";
+      if (!subjectName) {
+        return null;
+      }
+
+      const fromAverage = subjectSummary?.averageScore ?? null;
+      const fromFinal = toFivePointScore(subjectSummary?.finalMark ?? null);
+      const gradeValues = valuesBySubject.get(key) ?? [];
+      const fromGrades =
+        gradeValues.length > 0
+          ? gradeValues.reduce((sum, value) => sum + value, 0) / gradeValues.length
+          : null;
+
+      const current = fromAverage ?? fromFinal ?? fromGrades;
+      if (current === null || !Number.isFinite(current)) {
+        return null;
+      }
+
+      const normalizedCurrent = Number(Math.max(0, Math.min(5, current)).toFixed(2));
+      const historyRaw = historyBySubject.get(key) ?? [];
+      const history = [...historyRaw]
+        .sort((a, b) => {
+          const left = Number.isFinite(a.timestamp) ? a.timestamp : Number.MAX_SAFE_INTEGER;
+          const right = Number.isFinite(b.timestamp) ? b.timestamp : Number.MAX_SAFE_INTEGER;
+          return left - right;
+        })
+        .map((point) => ({
+          date: point.date,
+          score: point.score,
+        }));
+
+      let trend = 0;
+      if (history.length >= 2) {
+        const windowSize = Math.min(3, Math.max(1, Math.floor(history.length / 2)));
+        const recent = history.slice(-windowSize);
+        const previous = history.slice(-(windowSize * 2), -windowSize);
+        if (previous.length > 0) {
+          const recentAvg = recent.reduce((sum, item) => sum + item.score, 0) / recent.length;
+          const previousAvg = previous.reduce((sum, item) => sum + item.score, 0) / previous.length;
+          trend = Number((recentAvg - previousAvg).toFixed(2));
+        } else {
+          trend = Number((history[history.length - 1].score - history[0].score).toFixed(2));
+        }
+      }
+
+      return {
+        subject: subjectName,
+        current: normalizedCurrent,
+        trend,
+        risk: normalizedCurrent < 4,
+        history: history.length > 0 ? history : [{ date: new Date().toISOString().slice(0, 10), score: normalizedCurrent }],
+      };
+    })
+    .filter((item): item is StudentProfile["progress"][number] => Boolean(item));
+
+  if (journalProgress.length === 0) {
+    return null;
+  }
+
+  const averageScore =
+    journalProgress.reduce((sum, item) => sum + item.current, 0) / Math.max(1, journalProgress.length);
+
+  return {
+    ...baseProfile,
+    averageScore: Number(averageScore.toFixed(2)),
+    weakSubjects: journalProgress.filter((item) => item.risk).map((item) => item.subject),
+    progress: journalProgress,
+  };
+};
+
+const withJournalFallbackProfile = async (
+  user: SafeUser,
+  profile: StudentProfile,
+  lang: SubjectLang = "ru",
+): Promise<StudentProfile> => {
+  if (profile.progress.length > 0) {
+    return profile;
+  }
+
+  try {
+    const journal = await bilimClassService.getStudentJournal(user, undefined, lang);
+    if (journal.stats.grades <= 0) {
+      return profile;
+    }
+    return buildProfileFromJournal(profile, journal) ?? profile;
+  } catch {
+    return profile;
+  }
+};
+
 const averageScore = (profiles: StudentProfile[]) => {
   if (profiles.length === 0) {
     return 0;
@@ -268,16 +505,32 @@ const mapMentorOutput = (
       source: string;
     };
   },
-) => ({
-  role,
-  summary: payload.summary,
-  strengths: payload.strengths,
-  weaknesses: payload.weaknesses,
-  recommendations: payload.recommendations,
-  trends: payload.trends,
-  mode: payload.mode,
-  explainability: payload.explainability,
-});
+) => {
+  const normalizeText = (value: string) =>
+    value
+      .replace(/\bRule-?based\b/gi, "Алгоритмическая")
+      .replace(/\btrend\s+flat\b/gi, "динамика стабильная")
+      .replace(/\btrend\s+up\b/gi, "динамика растет")
+      .replace(/\btrend\s+down\b/gi, "динамика снижается")
+      .replace(/\brisk\s+low\b/gi, "риск низкий")
+      .replace(/\brisk\s+medium\b/gi, "риск средний")
+      .replace(/\brisk\s+high\b/gi, "риск высокий")
+      .replace(/\bLLM\b/g, "языковая модель")
+      .replace(/\bDemo\b/gi, "Демо")
+      .replace(/\bOpenAI\b/g, "облачная модель")
+      .replace(/\bscore\b/gi, "балл");
+
+  return {
+    role,
+    summary: normalizeText(payload.summary),
+    strengths: payload.strengths,
+    weaknesses: payload.weaknesses,
+    recommendations: payload.recommendations.map((item) => normalizeText(item)),
+    trends: payload.trends,
+    mode: payload.mode,
+    explainability: payload.explainability,
+  };
+};
 
 export const analyticsService = {
   async getDashboardByRole(user: SafeUser) {
@@ -326,7 +579,7 @@ export const analyticsService = {
         })),
         achievements: achievements.filter((item) => item.studentId === profile.studentId),
         events: eventsForUser(user, profiles),
-        aiSummary: `${profile.fullName}: уровень риска ${risk.riskLevel}, score ${risk.riskScore}/100.`,
+        aiSummary: `${profile.fullName}: уровень риска ${risk.riskLevel}, индекс риска ${risk.riskScore}/100.`,
         weeklySummary: {
           periodLabel: "week",
           delta: calculatePeriodDelta(profile),
@@ -365,7 +618,7 @@ export const analyticsService = {
         studentAchievements: achievements,
         events: eventsForUser(user, profiles),
         aiSummary: topClass
-          ? `Главная зона внимания: ${topClass.classId} (${topClass.highRiskStudents} учеников в high risk).`
+          ? `Главная зона внимания: ${topClass.classId} (${topClass.highRiskStudents} учеников в высоком риске).`
           : "Критичных зон внимания по классам не обнаружено.",
         teacherEfficiency,
       };
@@ -390,7 +643,7 @@ export const analyticsService = {
     };
   },
 
-  async getProgress(user: SafeUser) {
+  async getProgress(user: SafeUser, lang: SubjectLang = "ru") {
     const profiles = await listProfiles();
 
     if (user.role === "teacher") {
@@ -408,9 +661,11 @@ export const analyticsService = {
     }
 
     const profile = getLinkedStudent(user, profiles);
+    const profileWithJournal = profile ? await withJournalFallbackProfile(user, profile, lang) : null;
+    const localizedProfile = profileWithJournal ? localizeProfileSubjects(profileWithJournal, lang) : null;
     return {
       role: user.role,
-      student: profile ?? null,
+      student: localizedProfile,
       periodSwitch: ["Месяц", "Четверть", "Год"],
     };
   },
@@ -444,7 +699,11 @@ export const analyticsService = {
     };
   },
 
-  async getAiMentor(user: SafeUser) {
+  async getAiMentor(
+    user: SafeUser,
+    requestedJournalScope?: Partial<JournalFilterScope>,
+    lang: SubjectLang = "ru",
+  ) {
     const profiles = await listProfiles();
 
     if (user.role === "teacher") {
@@ -496,7 +755,7 @@ export const analyticsService = {
             ? fallbackRecommendations
             : [
                 "Проверить 2-3 ключевых причины риска по каждому классу.",
-                "Согласовать недельный план с учениками в high risk.",
+                "Согласовать недельный план с учениками в зоне высокого риска.",
               ],
       });
 
@@ -532,7 +791,7 @@ export const analyticsService = {
 
       const fallbackSummary =
         `По школе средний риск ${schoolAggregate.schoolRiskAverage}/100. ` +
-        `Классов в аналитике: ${schoolAggregate.classes}, учеников в high risk: ${schoolAggregate.highRiskStudents}.`;
+        `Классов в аналитике: ${schoolAggregate.classes}, учеников в высоком риске: ${schoolAggregate.highRiskStudents}.`;
 
       const llmSummary = await generateLLMSummaryFromStructuredData({
         role: user.role,
@@ -544,7 +803,7 @@ export const analyticsService = {
         fallbackSummary,
         fallbackRecommendations: [
           "Сконцентрировать поддержку на классах с наибольшим средним риском.",
-          "Ввести еженедельный контроль динамики high-risk учеников.",
+          "Ввести еженедельный контроль динамики учеников в зоне высокого риска.",
           "Проверить, как распределены риски по ключевым предметам и параллелям.",
         ],
       });
@@ -587,7 +846,57 @@ export const analyticsService = {
       });
     }
 
-    if (profile.progress.length === 0) {
+    let journalSnapshot:
+      | {
+          source: "bilimclass" | "cache" | "empty";
+          selected: {
+            eduYear: number;
+            period: number;
+            periodType: string;
+          };
+          grades: number;
+          subjects: number;
+          topSubjects: string[];
+          recentGrades: string[];
+          lastSyncAt: string | null;
+        }
+      | null = null;
+    let effectiveProfile: StudentProfile = localizeProfileSubjects(profile, lang);
+    let journalSourceForExplainability: "bilimclass" | "cache" | "empty" | null = null;
+
+    try {
+      const journal = await bilimClassService.getStudentJournal(user, requestedJournalScope, lang);
+      journalSourceForExplainability = journal.source;
+      journalSnapshot = {
+        source: journal.source,
+        selected: journal.selected,
+        grades: journal.stats.grades,
+        subjects: journal.stats.subjects,
+        topSubjects: journal.subjects
+          .slice(0, 3)
+          .map((item) => `${item.subjectName}: ${item.averageScore !== null ? item.averageScore.toFixed(2) : "н/д"}`),
+        recentGrades: [...journal.grades]
+          .sort((a, b) => {
+            const left = `${a.lessonDate} ${a.lessonTime ?? ""}`.trim();
+            const right = `${b.lessonDate} ${b.lessonTime ?? ""}`.trim();
+            return right.localeCompare(left);
+          })
+          .slice(0, 5)
+          .map((item) => `${item.subjectName}: ${item.scoreRaw}`),
+        lastSyncAt: journal.stats.lastSyncAt,
+      };
+
+      if (journal.stats.grades > 0) {
+        const synthesized = buildProfileFromJournal(effectiveProfile, journal);
+        if (synthesized) {
+          effectiveProfile = synthesized;
+        }
+      }
+    } catch {
+      journalSnapshot = null;
+    }
+
+    if (effectiveProfile.progress.length === 0) {
       return mapMentorOutput(user.role, {
         summary: `${profile.fullName}: пока нет оценок и трендов в дневнике, поэтому детальный риск не рассчитан.`,
         strengths: [],
@@ -601,21 +910,27 @@ export const analyticsService = {
         trends: [],
         explainability: {
           confidence: 42,
-          drivers: ["Данные по предметам отсутствуют, расчет риска временно ограничен."],
+          drivers: [
+            `Источник журнала: ${journalSourceForExplainability ?? "недоступен"}.`,
+            "Данные по предметам отсутствуют, расчет риска временно ограничен.",
+          ],
           source: "Профиль ученика",
         },
       });
     }
 
     const risk = calculateStudentRisk({
-      profile,
+      profile: effectiveProfile,
       analysisPreset: user.role === "parent" ? "balanced" : "comfort",
     });
-    const performance = summarizeStudentPerformance({ profile, analysisPreset: "balanced" }, risk);
+    const performance = summarizeStudentPerformance({ profile: effectiveProfile, analysisPreset: "balanced" }, risk);
 
     const fallbackSummary =
       `${profile.fullName}: риск ${getRiskLevelLabel(risk.riskLevel)} (${risk.riskScore}/100). ` +
-      `Средний балл ${performance.averageScore}, тренд ${performance.trendValue > 0 ? "+" : ""}${performance.trendValue}.`;
+      `Средний балл ${performance.averageScore}, тренд ${performance.trendValue > 0 ? "+" : ""}${performance.trendValue}.` +
+      (journalSnapshot
+        ? ` Журнал: ${journalSnapshot.grades} оценок по ${journalSnapshot.subjects} предметам.`
+        : "");
 
     const llmSummary = await generateLLMSummaryFromStructuredData({
       role: user.role,
@@ -628,11 +943,15 @@ export const analyticsService = {
         },
         risk,
         performance,
+        journal: journalSnapshot,
       },
       fallbackSummary,
       fallbackRecommendations:
         risk.recommendationsSeed.length > 0
-          ? risk.recommendationsSeed
+          ? [
+              ...risk.recommendationsSeed,
+              ...(journalSnapshot?.topSubjects.length ? [`Опираться на журнал: ${journalSnapshot.topSubjects[0]}.`] : []),
+            ]
           : ["Выбрать 1-2 предмета для фокуса на неделю и провести мини-проверку прогресса."],
     });
 
@@ -642,12 +961,13 @@ export const analyticsService = {
       weaknesses: risk.weakestSubjects,
       recommendations: llmSummary.recommendations,
       mode: llmSummary.source,
-      trends: profile.progress.map((item) => ({
+      trends: effectiveProfile.progress.map((item) => ({
         subject: item.subject,
         trend: Number(item.trend.toFixed(2)),
       })),
       explainability: buildExplainabilityDrivers(user.role, [risk], [
         `Итоговый риск: ${risk.riskScore}/100`,
+        ...(journalSnapshot ? [`Журнал: ${journalSnapshot.grades} оценок (${journalSnapshot.source}).`] : []),
         ...risk.reasons.slice(0, 2),
       ]),
     });
@@ -669,7 +989,7 @@ export const analyticsService = {
 
     return {
       fullscreenHero: {
-        title: "Главные события Aqbobek Lyceum",
+        title: "Главные события Matrix Education",
         subtitle: "Учеба, достижения, школьная жизнь",
       },
       achievements,
@@ -716,4 +1036,5 @@ export const analyticsService = {
     return ["student", "teacher", "parent", "admin"];
   },
 };
+
 

@@ -8,7 +8,7 @@ export function ProtectedRoute() {
   const { t } = useI18n();
 
   if (!initialized) {
-    return <div className="screen-center">{t("k_035")}</div>;
+    return <div className="screen-center">{t("portal_loading")}</div>;
   }
 
   if (!user) {
@@ -23,7 +23,7 @@ export function AuthRoute() {
   const { t } = useI18n();
 
   if (!initialized) {
-    return <div className="screen-center">{t("k_036")}</div>;
+    return <div className="screen-center">{t("session_checking")}</div>;
   }
 
   if (user) {

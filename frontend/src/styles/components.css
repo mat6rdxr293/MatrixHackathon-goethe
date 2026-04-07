@@ -181,6 +181,13 @@
   box-shadow: 0 2px 8px rgba(30, 64, 175, 0.3);
 }
 
+.chip-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .list-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(210px, 1fr));
@@ -459,11 +466,39 @@ select:focus {
   font-weight: 700;
 }
 
+.mentor-scope-row {
+  align-items: flex-end;
+}
+
+.mentor-scope-field {
+  min-width: 180px;
+  display: grid;
+  gap: 0.3rem;
+  color: var(--text2);
+  font-weight: 650;
+}
+
 .chat-toolbar {
   display: flex;
   justify-content: space-between;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+.mentor-chat-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mentor-quick-prompts {
+  margin-top: -0.1rem;
+}
+
+.mentor-analysis-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -0.2rem;
 }
 
 .chat-viewport {

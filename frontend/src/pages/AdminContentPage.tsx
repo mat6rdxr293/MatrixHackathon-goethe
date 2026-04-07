@@ -78,11 +78,11 @@ export function AdminContentPage() {
       <div className="page-layout">
         <section className="users-actions-card content-compose-actions">
           <div className="users-actions-copy">
-            <h3>{t("k_146")}</h3>
-            <p>{t("k_153")}</p>
+            <h3>{t("new_content")}</h3>
+            <p>{t("feed_content")}</p>
           </div>
           <button className="solid-button content-compose-open" type="button" onClick={() => setComposerOpen(true)}>
-            {t("k_146")}
+            {t("new_content")}
           </button>
         </section>
 
@@ -90,7 +90,7 @@ export function AdminContentPage() {
 
         {data ? (
           <Section
-            title={t("k_153")}
+            title={t("feed_content")}
             action={
               <div className="chip-group">
                 <button
@@ -98,7 +98,7 @@ export function AdminContentPage() {
                   type="button"
                   onClick={() => setFilter("all")}
                 >
-                  {t("k_109")}
+                  {t("all")}
                 </button>
                 {(["news", "event", "announcement"] as EventType[]).map((itemType) => (
                   <button
@@ -123,7 +123,7 @@ export function AdminContentPage() {
                   <p>{item.description}</p>
                   <div className="mini-meta">
                     <span>{formatDate(item.date, lang)}</span>
-                    {item.important ? <strong>{t("k_116")}</strong> : null}
+                    {item.important ? <strong>{t("important")}</strong> : null}
                   </div>
                   <div className="chip-row">
                     {(item.targetRoles ?? []).map((role) => (
@@ -153,7 +153,7 @@ export function AdminContentPage() {
 
         <aside className={isComposerOpen ? "users-modal content-compose-modal open" : "users-modal content-compose-modal"}>
           <header className="users-modal-head">
-            <h3>{t("k_146")}</h3>
+            <h3>{t("new_content")}</h3>
             <button className="icon-btn users-modal-close" type="button" onClick={() => setComposerOpen(false)}>
               <X size={18} />
             </button>
@@ -161,23 +161,23 @@ export function AdminContentPage() {
 
           <form className="admin-form content-compose-form" onSubmit={submit}>
             <label>
-              {t("k_149")}
+              {t("title")}
               <input value={title} onChange={(event) => setTitle(event.target.value)} minLength={4} required />
             </label>
             <label>
-              {t("k_147")}
+              {t("type")}
               <select value={type} onChange={(event) => setType(event.target.value as EventType)}>
-                <option value="news">{t("k_005")}</option>
-                <option value="event">{t("k_006")}</option>
-                <option value="announcement">{t("k_007")}</option>
+                <option value="news">{t("news")}</option>
+                <option value="event">{t("event")}</option>
+                <option value="announcement">{t("announcement")}</option>
               </select>
             </label>
             <label>
-              {t("k_148")}
+              {t("date")}
               <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
             </label>
             <label>
-              {t("k_225")}
+              {t("for_which_classes")}
               <input
                 value={targetClassIdsRaw}
                 onChange={(event) => setTargetClassIdsRaw(event.target.value)}
@@ -185,7 +185,7 @@ export function AdminContentPage() {
               />
             </label>
             <label>
-              {t("k_150")}
+              {t("description")}
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
@@ -194,7 +194,7 @@ export function AdminContentPage() {
               />
             </label>
             <label>
-              {t("k_224")}
+              {t("audience_show")}
               <div className="chip-row">
                 {(["student", "teacher", "parent", "admin"] as Role[]).map((role) => {
                   const active = targetRoles.includes(role);
@@ -217,7 +217,7 @@ export function AdminContentPage() {
             </label>
             {submitError ? <p className="form-error">{submitError}</p> : null}
             <button className="solid-button content-publish-button" type="submit" disabled={sending}>
-              {sending ? t("k_151") : t("k_152")}
+              {sending ? t("publishing") : t("publish")}
             </button>
           </form>
         </aside>

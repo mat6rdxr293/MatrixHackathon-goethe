@@ -40,7 +40,7 @@ export function EventsPage() {
                   type="button"
                   onClick={() => setTypeFilter("all")}
                 >
-                  {t("k_112")}
+                  {t("all_types")}
                 </button>
                 {(["news", "event", "announcement"] as EventType[]).map((type) => (
                   <button
@@ -54,22 +54,22 @@ export function EventsPage() {
                 ))}
               </div>
               <button className="outline-button" type="button" onClick={() => setUpcomingOnly((prev) => !prev)}>
-                {upcomingOnly ? t("k_113") : t("k_114")}
+                {upcomingOnly ? t("show_full_feed") : t("only_upcoming")}
               </button>
             </div>
 
-            <Section title={t("k_115")}>
+            <Section title={t("feed_events")}>
               <MetricBarChart
                 data={[
                   { label: t(eventTypeLabelKey("news")), value: statMap.news },
                   { label: t(eventTypeLabelKey("event")), value: statMap.event },
                   { label: t(eventTypeLabelKey("announcement")), value: statMap.announcement },
                 ]}
-                valueLabel={t("k_015")}
+                valueLabel={t("events")}
               />
             </Section>
 
-            <Section title={t("k_115")}>
+            <Section title={t("feed_events")}>
               <div className="list-grid">
                 {filtered.map((item) => (
                   <article key={item.id} className="mini-card">
@@ -80,7 +80,7 @@ export function EventsPage() {
                     <p>{item.description}</p>
                     <div className="mini-meta">
                       <span>{formatDate(item.date, lang)}</span>
-                      {item.important ? <strong>{t("k_116")}</strong> : null}
+                      {item.important ? <strong>{t("important")}</strong> : null}
                     </div>
                   </article>
                 ))}

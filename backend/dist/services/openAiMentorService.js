@@ -256,6 +256,11 @@ const fallbackChatReply = (input) => {
     const riskFlags = analytics?.prediction?.flags?.filter(Boolean) ?? [];
     const riskPercent = analytics?.prediction?.overallRisk;
     const topRiskMessage = analytics?.prediction?.topRiskMessage?.trim();
+    const journalSource = analytics?.journal?.source;
+    const journalSubjects = analytics?.journal?.subjects;
+    const journalGrades = analytics?.journal?.grades;
+    const journalTopSubjects = analytics?.journal?.topSubjects?.filter(Boolean) ?? [];
+    const journalRecentGrades = analytics?.journal?.recentGrades?.filter(Boolean) ?? [];
     const negativeTrendSubjects = (analytics?.trends ?? [])
         .filter((item) => item.trend < 0)
         .sort((a, b) => a.trend - b.trend)
@@ -282,7 +287,10 @@ const fallbackChatReply = (input) => {
         const topWeak = weaknesses[0];
         const topStrong = strengths[0];
         const riskText = typeof riskPercent === "number" ? `Текущий расчетный риск: ${riskPercent}%. ` : "";
-        return `Привет. Я ИИ-помощник портала. ${riskText}${topWeak ? `Сейчас в фокусе предмет "${topWeak}". ` : ""}${topStrong ? `Опора: "${topStrong}". ` : ""}Могу дать план на 7 дней и подготовить темы для разговора с учителем/родителем.`;
+        const journalText = typeof journalSubjects === "number" && typeof journalGrades === "number"
+            ? `В журнале доступно ${journalGrades} оценок по ${journalSubjects} предметам (${journalSource ?? "cache"}). `
+            : "";
+        return `Привет. Я ИИ-помощник портала. ${riskText}${topWeak ? `Сейчас в фокусе предмет "${topWeak}". ` : ""}${topStrong ? `Опора: "${topStrong}". ` : ""}${journalText}Могу дать план на 7 дней и подготовить темы для разговора с учителем/родителем.`;
     }
     if (isIdentityQuestion) {
         return "Да, я ИИ-помощник. Работаю в гибридном режиме: локальные алгоритмы риска + AI-формулировки рекомендаций.";
@@ -310,6 +318,7 @@ const fallbackChatReply = (input) => {
         }
         const riskPrefix = typeof riskPercent === "number" ? `Расчетный риск: ${riskPercent}%.` : "";
         const mainSignal = topRiskMessage ||
+            journalTopSubjects[0] ||
             riskFlags[0] ||
             predictionsSummary ||
             "По текущим расчетам есть зоны, которые требуют внимания.";
@@ -324,13 +333,15 @@ const fallbackChatReply = (input) => {
             .join(" ");
     }
     if (isPlanQuestion || questionFlat.includes("что делать")) {
+        const journalLine = journalTopSubjects.length > 0 ? `Опора на журнал: ${journalTopSubjects.slice(0, 2).join("; ")}.` : "";
         const plan = recommendationPool.length > 0
             ? recommendationPool
                 .slice(0, 3)
                 .map((item, index) => `${index + 1}) ${item}`)
                 .join(" ")
             : "1) 20-30 минут на приоритетный предмет в день. 2) Мини-проверка в середине недели. 3) Повторный замер в конце недели.";
-        return `План на 7 дней: ${plan}`;
+        const recentLine = journalRecentGrades.length > 0 ? `Последние оценки: ${journalRecentGrades.slice(0, 3).join("; ")}.` : "";
+        return `План на 7 дней: ${plan} ${journalLine} ${recentLine}`.trim();
     }
     if (weaknesses.length > 0 || strengths.length > 0) {
         const weakText = weaknesses.length > 0 ? `Зона внимания: ${formatList(weaknesses, 2)}.` : "";
@@ -375,7 +386,7 @@ const buildChatPrompt = (input) => {
         .map((item) => `${item.role === "assistant" ? "Ассистент" : "Пользователь"}: ${item.content}`)
         .join("\n");
     return [
-        "Ты школьный ИИ-ассистент Aqbobek Lyceum.",
+        "Ты школьный ИИ-ассистент Matrix Education.",
         "Отвечай коротко, понятно и по делу на русском языке.",
         "Если вопрос о рисках и оценках, опирайся на переданный контекст.",
         "Не придумывай факты, которых нет в контексте.",

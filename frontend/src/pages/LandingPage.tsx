@@ -25,98 +25,98 @@ export function LandingPage() {
           <div className="landing-nav">
             <div className="logo-tag">
               <School size={14} />
-              Aqbobek Lyceum
+              Matrix Education
             </div>
             <LanguageSwitch />
           </div>
 
           <div className="hero-grid">
             <div>
-              <p className="hero-kicker">{t("k_043")}</p>
-              <h1>{t("k_160")}</h1>
-              <p>{t("k_161")}</p>
+              <p className="hero-kicker">{t("school_digital_environment")}</p>
+              <h1>{t("portal_where_student_teacher_parent_and_administration_view")}</h1>
+              <p>{t("grades_successes_events_assistant_ai_and_wallboard_in_single")}</p>
               <div className="hero-actions">
                 <Link className="solid-button" to="/login">
-                  {t("k_044")}
+                  {t("login_to_portal")}
                 </Link>
                 <a className="outline-button link-button" href="#features">
-                  {t("k_045")}
+                  {t("view_features")}
                 </a>
               </div>
             </div>
 
             <div className="hero-metrics">
-              <StatCard title={t("k_046")} value="4" caption={t("k_047")} icon={ChartColumnIncreasing} />
-              <StatCard title={t("k_048")} value="3" caption={t("k_239")} icon={Brain} />
-              <StatCard title={t("k_049")} value={t("k_050")} caption={t("k_051")} icon={CalendarDays} />
+              <StatCard title={t("roles_in_system")} value="4" caption={t("student_teacher_parent_admin")} icon={ChartColumnIncreasing} />
+              <StatCard title={t("main_features")} value="3" caption={t("bilimclass_plus_assistant_ai_plus_wallboard")} icon={Brain} />
+              <StatCard title={t("single_environment")} value={t("yes")} caption={t("single_login_for_all_roles")} icon={CalendarDays} />
             </div>
           </div>
         </header>
 
         <section id="features" className="landing-section">
-          <h2>{t("k_052")}</h2>
+          <h2>{t("key_modules")}</h2>
           <div className="feature-grid">
             <article className="feature-card">
               <h3>
                 <ChartColumnIncreasing size={17} />
-                {t("k_053")}
+                {t("study_panel")}
               </h3>
-              <p>{t("k_054")}</p>
+              <p>{t("average_score_trend_zones_risk")}</p>
             </article>
             <article className="feature-card">
               <h3>
                 <Trophy size={17} />
-                {t("k_055")}
+                {t("successes")}
               </h3>
-              <p>{t("k_056")}</p>
+              <p>{t("badges_wins_rating_students")}</p>
             </article>
             <article className="feature-card">
               <h3>
                 <CalendarDays size={17} />
-                {t("k_057")}
+                {t("news_and_events_2")}
               </h3>
-              <p>{t("k_058")}</p>
+              <p>{t("news_events_and_important_announcements")}</p>
             </article>
             <article className="feature-card">
               <h3>
                 <Brain size={17} />
-                {t("k_059")}
+                {t("assistant_ai")}
               </h3>
-              <p>{t("k_162")}</p>
+              <p>{t("analysis_progress_and_personal_recommendations")}</p>
             </article>
           </div>
         </section>
 
         <section className="landing-section">
-          <h2>{t("k_060")}</h2>
+          <h2>{t("roles_users")}</h2>
           <div className="roles-grid">
             <article className="role-card">
               <h3>
                 <GraduationCap size={17} />
-                {t("k_001")}
+                {t("student")}
               </h3>
-              <p>{t("k_061")}</p>
+              <p>{t("personal_progress_goals_and_tips_ai")}</p>
             </article>
             <article className="role-card">
               <h3>
                 <UserRound size={17} />
-                {t("k_002")}
+                {t("teacher")}
               </h3>
-              <p>{t("k_062")}</p>
+              <p>{t("classes_at_risk_students_summary")}</p>
             </article>
             <article className="role-card">
               <h3>
                 <UsersRound size={17} />
-                {t("k_003")}
+                {t("parent")}
               </h3>
-              <p>{t("k_063")}</p>
+              <p>{t("trend_child_and_recommendations")}</p>
             </article>
             <article className="role-card">
               <h3>
                 <ShieldCheck size={17} />
-                {t("k_004")}
+                {t("administration")}
               </h3>
-              <p>{t("k_064")}</p>
+              <p>{t("overview_school_and_management_news")}</p>
             </article>
           </div>
         </section>

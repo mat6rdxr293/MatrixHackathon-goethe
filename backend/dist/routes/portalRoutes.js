@@ -1,7 +1,11 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.portalRoutes = void 0;
 const express_1 = require("express");
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const zod_1 = require("zod");
 const auth_1 = require("../middleware/auth");
 const analyticsService_1 = require("../services/analyticsService");
@@ -52,6 +56,23 @@ const aiChatSchema = zod_1.z.object({
                 .optional(),
             teacherTopRisks: zod_1.z.array(zod_1.z.string().trim().min(1).max(240)).max(8).optional(),
             adminTopRiskClasses: zod_1.z.array(zod_1.z.string().trim().min(1).max(240)).max(8).optional(),
+            journal: zod_1.z
+                .object({
+                selected: zod_1.z
+                    .object({
+                    eduYear: zod_1.z.number().int().positive().optional(),
+                    period: zod_1.z.number().int().positive().optional(),
+                    periodType: zod_1.z.string().trim().min(1).max(40).optional(),
+                })
+                    .optional(),
+                source: zod_1.z.enum(["bilimclass", "cache", "empty"]).optional(),
+                subjects: zod_1.z.number().int().min(0).optional(),
+                grades: zod_1.z.number().int().min(0).optional(),
+                topSubjects: zod_1.z.array(zod_1.z.string().trim().min(1).max(200)).max(10).optional(),
+                recentGrades: zod_1.z.array(zod_1.z.string().trim().min(1).max(200)).max(10).optional(),
+                lastSyncAt: zod_1.z.string().trim().max(80).nullable().optional(),
+            })
+                .optional(),
         })
             .optional(),
     })
@@ -87,6 +108,21 @@ const bilimBindingSchema = zod_1.z.object({
     period: zod_1.z.number().int().positive().optional(),
     periodType: zod_1.z.string().trim().min(1).max(40).optional(),
 });
+const journalQuerySchema = zod_1.z.object({
+    eduYear: zod_1.z.coerce.number().int().positive().optional(),
+    period: zod_1.z.coerce.number().int().positive().optional(),
+    periodType: zod_1.z.string().trim().min(1).max(40).optional(),
+    lang: zod_1.z.enum(["ru", "kk"]).optional(),
+});
+const aiMentorQuerySchema = zod_1.z.object({
+    eduYear: zod_1.z.coerce.number().int().positive().optional(),
+    period: zod_1.z.coerce.number().int().positive().optional(),
+    periodType: zod_1.z.string().trim().min(1).max(40).optional(),
+    lang: zod_1.z.enum(["ru", "kk"]).optional(),
+});
+const localizedLangQuerySchema = zod_1.z.object({
+    lang: zod_1.z.enum(["ru", "kk"]).optional(),
+});
 const summarizePredictions = (payload) => {
     if (payload.role === "student" || payload.role === "parent") {
         return payload.prediction?.topRiskMessage ?? "";
@@ -104,6 +140,28 @@ const summarizePredictions = (payload) => {
     }
     return "";
 };
+const summarizeJournalForChat = (journal) => {
+    const topSubjects = journal.subjects
+        .slice(0, 3)
+        .map((item) => `${item.subjectName}: ${item.averageScore !== null ? item.averageScore.toFixed(2) : "нет среднего"} (${item.gradesCount})`);
+    const recentGrades = [...journal.grades]
+        .sort((a, b) => {
+        const left = `${a.lessonDate} ${a.lessonTime ?? ""}`.trim();
+        const right = `${b.lessonDate} ${b.lessonTime ?? ""}`.trim();
+        return right.localeCompare(left);
+    })
+        .slice(0, 5)
+        .map((item) => `${item.subjectName} ${item.scoreRaw}`);
+    return {
+        selected: journal.selected,
+        source: journal.source,
+        subjects: journal.stats.subjects,
+        grades: journal.stats.grades,
+        topSubjects,
+        recentGrades,
+        lastSyncAt: journal.stats.lastSyncAt,
+    };
+};
 exports.portalRoutes.get("/dashboard", async (req, res) => {
     if (!req.user) {
         res.status(401).json({ message: "Требуется вход в систему" });
@@ -117,8 +175,37 @@ exports.portalRoutes.get("/progress", async (req, res) => {
         res.status(401).json({ message: "Требуется вход в систему" });
         return;
     }
-    const progress = await analyticsService_1.analyticsService.getProgress(req.user);
+    const parsed = localizedLangQuerySchema.safeParse(req.query ?? {});
+    if (!parsed.success) {
+        res.status(400).json({ message: "Неверные параметры запроса", errors: parsed.error.flatten() });
+        return;
+    }
+    const progress = await analyticsService_1.analyticsService.getProgress(req.user, parsed.data.lang ?? "ru");
     res.json(progress);
+});
+exports.portalRoutes.get("/journal", async (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    if (req.user.role !== "student" && req.user.role !== "parent") {
+        res.status(403).json({ message: "Недостаточно прав доступа" });
+        return;
+    }
+    const parsed = journalQuerySchema.safeParse(req.query ?? {});
+    if (!parsed.success) {
+        res.status(400).json({ message: "Неверные параметры запроса", errors: parsed.error.flatten() });
+        return;
+    }
+    try {
+        const { lang = "ru", ...scope } = parsed.data;
+        const journal = await bilimClassService_1.bilimClassService.getStudentJournal(req.user, scope, lang);
+        res.json(journal);
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : "Не удалось получить журнал ученика";
+        res.status(502).json({ message });
+    }
 });
 exports.portalRoutes.get("/achievements", async (req, res) => {
     if (!req.user) {
@@ -306,12 +393,18 @@ exports.portalRoutes.get("/ai-mentor", async (req, res) => {
         res.status(401).json({ message: "Требуется вход в систему" });
         return;
     }
+    const parsed = aiMentorQuerySchema.safeParse(req.query ?? {});
+    if (!parsed.success) {
+        res.status(400).json({ message: "Неверные параметры запроса", errors: parsed.error.flatten() });
+        return;
+    }
     try {
-        const aiMentorData = await analyticsService_1.analyticsService.getAiMentor(req.user);
+        const { lang = "ru", ...scope } = parsed.data;
+        const aiMentorData = await analyticsService_1.analyticsService.getAiMentor(req.user, scope, lang);
         res.json(aiMentorData);
     }
     catch (error) {
-        const message = error instanceof Error ? error.message : "Не удалось получить AI-анализ";
+        const message = error instanceof Error ? error.message : "Не удалось получить ИИ-анализ";
         res.status(502).json({ message });
     }
 });
@@ -367,6 +460,17 @@ exports.portalRoutes.post("/ai-chat", async (req, res) => {
                     .map((item) => `${item.classId}: ${item.averageRisk}% (${item.highRiskStudents}/${item.totalStudents})`);
             }
             analyticsContext = nextContext;
+        }
+    }
+    if (req.user.role === "student" || req.user.role === "parent") {
+        try {
+            const journal = await bilimClassService_1.bilimClassService.getStudentJournal(req.user, undefined, "ru");
+            const nextContext = { ...(analyticsContext ?? {}) };
+            nextContext.journal = summarizeJournalForChat(journal);
+            analyticsContext = nextContext;
+        }
+        catch {
+            // Keep chat working even if journal sync/cache is unavailable.
         }
     }
     try {
@@ -479,4 +583,296 @@ exports.portalRoutes.get("/student-profiles/:studentId", async (req, res) => {
         return;
     }
     res.json(result);
+});
+// ─── Subject Practice ─────────────────────────────────────────────────────────
+const subjectPracticeSchema = zod_1.z.object({
+    subject: zod_1.z.string().trim().min(1).max(80),
+    mode: zod_1.z.enum(["hint", "check", "solution"]),
+    problem: zod_1.z.string().trim().min(1).max(2000),
+    studentAttempt: zod_1.z.string().trim().max(2000).optional(),
+    taskId: zod_1.z.coerce.number().int().min(1).optional(),
+});
+const subjectSessionSchema = zod_1.z.object({
+    subject: zod_1.z.string().trim().min(1).max(80),
+    taskId: zod_1.z.coerce.number().int().min(1),
+    score: zod_1.z.number().min(0).max(100),
+    timeSpentSeconds: zod_1.z.number().int().min(0).optional(),
+});
+const subjectPracticeOptionSchema = zod_1.z.object({
+    id: zod_1.z.string().trim().min(1).max(80),
+    text: zod_1.z.string().trim().min(1).max(300),
+});
+const subjectPracticePairSchema = zod_1.z.object({
+    leftId: zod_1.z.string().trim().min(1).max(80),
+    rightId: zod_1.z.string().trim().min(1).max(80),
+});
+const subjectPracticeQuestionPayloadSchema = zod_1.z.discriminatedUnion("type", [
+    zod_1.z.object({
+        type: zod_1.z.literal("single_choice"),
+        prompt: zod_1.z.string().trim().min(5).max(1200),
+        explanation: zod_1.z.string().trim().max(1200).optional(),
+        sortOrder: zod_1.z.number().int().min(0).optional(),
+        options: zod_1.z.array(subjectPracticeOptionSchema).min(2).max(10),
+        correctOptionId: zod_1.z.string().trim().min(1).max(80),
+    }),
+    zod_1.z.object({
+        type: zod_1.z.literal("multiple_choice"),
+        prompt: zod_1.z.string().trim().min(5).max(1200),
+        explanation: zod_1.z.string().trim().max(1200).optional(),
+        sortOrder: zod_1.z.number().int().min(0).optional(),
+        options: zod_1.z.array(subjectPracticeOptionSchema).min(2).max(12),
+        correctOptionIds: zod_1.z.array(zod_1.z.string().trim().min(1).max(80)).min(1).max(12),
+    }),
+    zod_1.z.object({
+        type: zod_1.z.literal("short_answer"),
+        prompt: zod_1.z.string().trim().min(5).max(1200),
+        explanation: zod_1.z.string().trim().max(1200).optional(),
+        sortOrder: zod_1.z.number().int().min(0).optional(),
+        acceptedAnswers: zod_1.z.array(zod_1.z.string().trim().min(1).max(180)).min(1).max(20),
+    }),
+    zod_1.z.object({
+        type: zod_1.z.literal("matching"),
+        prompt: zod_1.z.string().trim().min(5).max(1200),
+        explanation: zod_1.z.string().trim().max(1200).optional(),
+        sortOrder: zod_1.z.number().int().min(0).optional(),
+        leftItems: zod_1.z.array(subjectPracticeOptionSchema).min(2).max(12),
+        rightItems: zod_1.z.array(subjectPracticeOptionSchema).min(2).max(12),
+        correctPairs: zod_1.z.array(subjectPracticePairSchema).min(1).max(20),
+    }),
+    zod_1.z.object({
+        type: zod_1.z.literal("ordering"),
+        prompt: zod_1.z.string().trim().min(5).max(1200),
+        explanation: zod_1.z.string().trim().max(1200).optional(),
+        sortOrder: zod_1.z.number().int().min(0).optional(),
+        items: zod_1.z.array(subjectPracticeOptionSchema).min(2).max(12),
+        correctOrder: zod_1.z.array(zod_1.z.string().trim().min(1).max(80)).min(2).max(12),
+    }),
+]);
+const subjectPracticeSubmissionSchema = zod_1.z.object({
+    subject: zod_1.z.string().trim().min(1).max(80),
+    answers: zod_1.z
+        .array(zod_1.z.object({
+        questionId: zod_1.z.string().trim().min(1).max(80),
+        answer: zod_1.z.discriminatedUnion("type", [
+            zod_1.z.object({
+                type: zod_1.z.literal("single_choice"),
+                optionId: zod_1.z.string().trim().min(1).max(80),
+            }),
+            zod_1.z.object({
+                type: zod_1.z.literal("multiple_choice"),
+                optionIds: zod_1.z.array(zod_1.z.string().trim().min(1).max(80)).max(40),
+            }),
+            zod_1.z.object({
+                type: zod_1.z.literal("short_answer"),
+                text: zod_1.z.string().trim().max(500),
+            }),
+            zod_1.z.object({
+                type: zod_1.z.literal("matching"),
+                pairs: zod_1.z.array(subjectPracticePairSchema).max(30),
+            }),
+            zod_1.z.object({
+                type: zod_1.z.literal("ordering"),
+                order: zod_1.z.array(zod_1.z.string().trim().min(1).max(80)).max(20),
+            }),
+        ]),
+    }))
+        .max(200),
+});
+const subjectPathParamSchema = zod_1.z.object({
+    subject: zod_1.z.string().trim().min(1).max(80),
+});
+const questionPathParamSchema = zod_1.z.object({
+    subject: zod_1.z.string().trim().min(1).max(80),
+    questionId: zod_1.z.string().trim().min(1).max(80),
+});
+exports.portalRoutes.get("/subject-practice/questions/:subject", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    const parsed = subjectPathParamSchema.safeParse(req.params ?? {});
+    if (!parsed.success) {
+        res.status(400).json({ message: "Неверный предмет", errors: parsed.error.flatten() });
+        return;
+    }
+    const includeAnswers = req.user.role === "teacher" || req.user.role === "admin";
+    const items = academicStoreService_1.academicStoreService.listSubjectPracticeQuestions(parsed.data.subject, includeAnswers);
+    res.json({ items });
+});
+exports.portalRoutes.post("/subject-practice/questions/submit", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    const parsed = subjectPracticeSubmissionSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+        res.status(400).json({ message: "Неверные данные ответа", errors: parsed.error.flatten() });
+        return;
+    }
+    const result = academicStoreService_1.academicStoreService.evaluateSubjectPracticeSubmission(parsed.data);
+    res.json(result);
+});
+exports.portalRoutes.post("/subject-practice/questions/:subject", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    if (req.user.role !== "teacher" && req.user.role !== "admin") {
+        res.status(403).json({ message: "Недостаточно прав доступа" });
+        return;
+    }
+    const paramsParsed = subjectPathParamSchema.safeParse(req.params ?? {});
+    if (!paramsParsed.success) {
+        res.status(400).json({ message: "Неверный предмет", errors: paramsParsed.error.flatten() });
+        return;
+    }
+    const payloadParsed = subjectPracticeQuestionPayloadSchema.safeParse(req.body ?? {});
+    if (!payloadParsed.success) {
+        res.status(400).json({ message: "Неверные данные вопроса", errors: payloadParsed.error.flatten() });
+        return;
+    }
+    try {
+        const item = academicStoreService_1.academicStoreService.createSubjectPracticeQuestion({
+            subject: paramsParsed.data.subject,
+            question: payloadParsed.data,
+            createdBy: req.user.name,
+        });
+        res.status(201).json({ item });
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : "Не удалось создать вопрос";
+        res.status(400).json({ message });
+    }
+});
+exports.portalRoutes.put("/subject-practice/questions/:subject/:questionId", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    if (req.user.role !== "teacher" && req.user.role !== "admin") {
+        res.status(403).json({ message: "Недостаточно прав доступа" });
+        return;
+    }
+    const paramsParsed = questionPathParamSchema.safeParse(req.params ?? {});
+    if (!paramsParsed.success) {
+        res.status(400).json({ message: "Неверные параметры", errors: paramsParsed.error.flatten() });
+        return;
+    }
+    const payloadParsed = subjectPracticeQuestionPayloadSchema.safeParse(req.body ?? {});
+    if (!payloadParsed.success) {
+        res.status(400).json({ message: "Неверные данные вопроса", errors: payloadParsed.error.flatten() });
+        return;
+    }
+    try {
+        const item = academicStoreService_1.academicStoreService.updateSubjectPracticeQuestion({
+            subject: paramsParsed.data.subject,
+            questionId: paramsParsed.data.questionId,
+            question: payloadParsed.data,
+        });
+        res.json({ item });
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : "Не удалось обновить вопрос";
+        res.status(message === "Question not found" ? 404 : 400).json({ message });
+    }
+});
+exports.portalRoutes.delete("/subject-practice/questions/:subject/:questionId", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    if (req.user.role !== "teacher" && req.user.role !== "admin") {
+        res.status(403).json({ message: "Недостаточно прав доступа" });
+        return;
+    }
+    const paramsParsed = questionPathParamSchema.safeParse(req.params ?? {});
+    if (!paramsParsed.success) {
+        res.status(400).json({ message: "Неверные параметры", errors: paramsParsed.error.flatten() });
+        return;
+    }
+    const removed = academicStoreService_1.academicStoreService.deleteSubjectPracticeQuestion(paramsParsed.data.subject, paramsParsed.data.questionId);
+    if (!removed) {
+        res.status(404).json({ message: "Вопрос не найден" });
+        return;
+    }
+    res.json({ ok: true });
+});
+exports.portalRoutes.post("/subject-practice/ai", async (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    const parsed = subjectPracticeSchema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ message: "Неверные данные запроса", errors: parsed.error.flatten() });
+        return;
+    }
+    const { subject, mode, problem, studentAttempt } = parsed.data;
+    const modeLabel = mode === "hint" ? "подсказку" : mode === "check" ? "проверку" : "полное решение";
+    const systemPrompt = `Ты — умный ИИ-ассистент по предмету "${subject}" для школьников лицея. Отвечай строго по делу, кратко и понятно. Используй математическую нотацию если нужно. Отвечай на русском языке.`;
+    const userMessage = mode === "hint"
+        ? `Дай ${modeLabel} для задачи без решения:\n${problem}`
+        : mode === "check"
+            ? `Проверь решение ученика. Задача: ${problem}\nРешение ученика: ${studentAttempt ?? "(нет)"}\nНапиши процент выполнения в формате "Выполнено: X%".`
+            : `Дай ${modeLabel} для задачи:\n${problem}`;
+    try {
+        const aiReply = await openAiMentorService_1.openAiMentorService.generateChatReply({
+            role: req.user.role,
+            userName: req.user.name,
+            message: userMessage,
+            history: [],
+            context: { mentorSummary: systemPrompt, recommendationHints: [] },
+        });
+        res.json({ text: aiReply.reply, mode: aiReply.mode });
+    }
+    catch (error) {
+        const messageText = error instanceof Error ? error.message : "Ошибка AI-ответа";
+        res.status(502).json({ message: messageText });
+    }
+});
+exports.portalRoutes.post("/subject-practice/session", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    const parsed = subjectSessionSchema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ message: "Неверные данные", errors: parsed.error.flatten() });
+        return;
+    }
+    const studentId = req.user.role === "student" ? (req.user.linkedStudentId ?? req.user.id) : req.user.id;
+    academicStoreService_1.academicStoreService.recordSubjectSession({
+        studentId,
+        subject: parsed.data.subject,
+        taskId: parsed.data.taskId,
+        score: parsed.data.score,
+        timeSpentSeconds: parsed.data.timeSpentSeconds ?? 0,
+    });
+    res.json({ ok: true });
+});
+exports.portalRoutes.get("/subject-practice/sessions", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    const studentId = req.user.role === "student" ? (req.user.linkedStudentId ?? req.user.id) : req.user.id;
+    const items = academicStoreService_1.academicStoreService.listSubjectSessions(studentId);
+    res.json({ items });
+});
+// ── Practice Module auth token ──────────────────────────────────────────────
+// Issues a short-lived signed JWT so the practice module can verify the role
+// without trusting a plain URL parameter.
+exports.portalRoutes.get("/practice-token", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ message: "Требуется вход в систему" });
+        return;
+    }
+    const secret = process.env.PM_SHARED_SECRET;
+    if (!secret) {
+        res.status(503).json({ message: "PM_SHARED_SECRET не задан на сервере" });
+        return;
+    }
+    const payload = { sub: req.user.id, role: req.user.role };
+    const token = jsonwebtoken_1.default.sign(payload, secret, { expiresIn: "5m", algorithm: "HS256" });
+    res.json({ token });
 });

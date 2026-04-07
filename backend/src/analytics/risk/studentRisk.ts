@@ -54,6 +54,43 @@ const buildSubjectRiskScore = (current: number, trend: number, riskFlag: boolean
   return clampScore(score);
 };
 
+const EXCELLENT_AVERAGE_THRESHOLD = 5.0;
+const EXCELLENT_WEAK_SUBJECT_THRESHOLD = 4.0;
+
+const toSubjectList = (items: StudentAnalyticsInput["profile"]["progress"]) => {
+  const unique = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    if (unique.has(item.subject)) {
+      continue;
+    }
+    unique.add(item.subject);
+    result.push(item.subject);
+  }
+  return result;
+};
+
+const buildStrongAndWeakSubjects = (profile: StudentAnalyticsInput["profile"]) => {
+  const sortedStrong = [...profile.progress].sort((a, b) => b.current - a.current || b.trend - a.trend);
+  const sortedWeak = [...profile.progress].sort((a, b) => a.current - b.current || a.trend - b.trend);
+
+  const average = profile.averageScore;
+  const isExcellent = average >= EXCELLENT_AVERAGE_THRESHOLD;
+  const weakCandidates = sortedWeak.filter((item) => {
+    if (isExcellent) {
+      return item.current <= EXCELLENT_WEAK_SUBJECT_THRESHOLD || item.risk || item.trend < -0.2;
+    }
+    return item.current < 4;
+  });
+
+  const weakestSubjects = toSubjectList(weakCandidates).slice(0, 3);
+  const weakSet = new Set(weakestSubjects);
+
+  const strongestSubjects = toSubjectList(sortedStrong.filter((item) => !weakSet.has(item.subject))).slice(0, 3);
+
+  return { strongestSubjects, weakestSubjects };
+};
+
 export const getRiskLevelLabel = (riskLevel: StudentRiskResult["riskLevel"]) => {
   if (riskLevel === "high") {
     return "высокий";
@@ -184,15 +221,7 @@ export const calculateStudentRisk = (input: StudentAnalyticsInput): StudentRiskR
   const riskLevel: StudentRiskResult["riskLevel"] = riskScore >= 67 ? "high" : riskScore >= 40 ? "medium" : "low";
   const reasonsDetailed = buildStudentRiskReasons(input, riskScore);
 
-  const strongestSubjects = [...profile.progress]
-    .sort((a, b) => b.current - a.current || b.trend - a.trend)
-    .slice(0, 3)
-    .map((item) => item.subject);
-
-  const weakestSubjects = [...profile.progress]
-    .sort((a, b) => a.current - b.current || a.trend - b.trend)
-    .slice(0, 3)
-    .map((item) => item.subject);
+  const { strongestSubjects, weakestSubjects } = buildStrongAndWeakSubjects(profile);
 
   const recommendationsSeed = [
     weakestSubjects[0] ? `Сфокусироваться на теме "${weakestSubjects[0]}" тремя короткими блоками в неделю.` : "",

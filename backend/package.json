@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "Aqbobek Lyceum unified school portal backend",
+  "description": "Matrix Education unified school portal backend",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

@@ -169,7 +169,7 @@ export function ClassesPage() {
 
         {!loading && !error ? (
           <>
-            <Section title={t("k_164")}>
+            <Section title={t("grid_classes")}>
               {classes.length > 0 ? (
                 <div className="class-grid">
                   {classes.map((item, index) => {
@@ -189,54 +189,54 @@ export function ClassesPage() {
                         whileHover={{ y: -2 }}
                       >
                         <div className="class-pill-head">
-                          <span className="chip">{t("k_083")}</span>
+                          <span className="chip">{t("class")}</span>
                           <strong>{item.classId}</strong>
                         </div>
                         <p>
-                          {t("k_170")}: {item.averageScore.toFixed(1)}
+                          {t("average_score_class")}: {item.averageScore.toFixed(1)}
                         </p>
                         <p>
-                          {t("k_124")}: {item.riskStudentIds.length}
+                          {t("risks")}: {item.riskStudentIds.length}
                         </p>
                       </motion.button>
                     );
                   })}
                 </div>
               ) : (
-                <p>{t("k_172")}</p>
+                <p>{t("select_class_for_view_analytics")}</p>
               )}
             </Section>
 
             {selectedClass ? (
               <>
-                <Section title={t("k_176")}>
+                <Section title={t("metrics_class")}>
                   <div className="stats-grid stats-grid-four">
-                    <StatCard title={t("k_083")} value={selectedClass.classId} icon={GraduationCap} />
-                    <StatCard title={t("k_169")} value={classStudents.length} icon={Users} />
-                    <StatCard title={t("k_170")} value={selectedClass.averageScore.toFixed(1)} icon={BarChart3} />
-                    <StatCard title={t("k_139")} value={riskCount} tone="warn" icon={AlertTriangle} />
-                    <StatCard title={t("k_173")} value={selectedClass.teacherId ?? "-"} icon={UserRound} />
+                    <StatCard title={t("class")} value={selectedClass.classId} icon={GraduationCap} />
+                    <StatCard title={t("students_in_class")} value={classStudents.length} icon={Users} />
+                    <StatCard title={t("average_score_class")} value={selectedClass.averageScore.toFixed(1)} icon={BarChart3} />
+                    <StatCard title={t("at_risk_students")} value={riskCount} tone="warn" icon={AlertTriangle} />
+                    <StatCard title={t("curator_class")} value={selectedClass.teacherId ?? "-"} icon={UserRound} />
                   </div>
                 </Section>
 
-                <Section title={t("k_165")}>
+                <Section title={t("overview_class")}>
                   {subjectAverages.length > 0 ? (
-                    <MetricBarChart data={subjectAverages} valueLabel={t("k_102")} />
+                    <MetricBarChart data={subjectAverages} valueLabel={t("score")} />
                   ) : (
-                    <p>{t("k_171")}</p>
+                    <p>{t("in_this_class_yet_none_students")}</p>
                   )}
                 </Section>
 
-                <Section title={t("k_166")}>
+                <Section title={t("list_class")}>
                   {classStudents.length > 0 ? (
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>{t("k_126")}</th>
-                          <th>{t("k_071")}</th>
-                          <th>{t("k_178")}</th>
-                          <th>{t("k_103")}</th>
-                          <th>{t("k_045")}</th>
+                          <th>{t("name")}</th>
+                          <th>{t("average_score")}</th>
+                          <th>{t("at_risk_subjects")}</th>
+                          <th>{t("status")}</th>
+                          <th>{t("view_features")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -252,9 +252,9 @@ export function ClassesPage() {
                               <td>{student.weakSubjects.length}</td>
                               <td>
                                 {isRisk ? (
-                                  <span className="chip warn">{t("k_104")}</span>
+                                  <span className="chip warn">{t("need_support")}</span>
                                 ) : (
-                                  <span className="chip good">{t("k_105")}</span>
+                                  <span className="chip good">{t("stable")}</span>
                                 )}
                               </td>
                               <td>
@@ -263,7 +263,7 @@ export function ClassesPage() {
                                   type="button"
                                   onClick={() => setSelectedStudentId(student.studentId)}
                                 >
-                                  {t("k_168")}
+                                  {t("open_profile")}
                                 </button>
                               </td>
                             </tr>
@@ -272,11 +272,11 @@ export function ClassesPage() {
                       </tbody>
                     </table>
                   ) : (
-                    <p>{t("k_171")}</p>
+                    <p>{t("in_this_class_yet_none_students")}</p>
                   )}
                 </Section>
 
-                <Section title={t("k_167")}>
+                <Section title={t("profile_student")}>
                   {selectedStudent ? (
                     <motion.div
                       className="class-profile-shell"
@@ -287,7 +287,7 @@ export function ClassesPage() {
                       <div className="class-profile-card">
                         <h4>{selectedStudent.fullName}</h4>
                         <p>
-                          {t("k_083")} {selectedStudent.classId}
+                          {t("class")} {selectedStudent.classId}
                         </p>
                         <div className="chip-row">
                           {selectedStudent.weakSubjects.length > 0 ? (
@@ -297,17 +297,17 @@ export function ClassesPage() {
                               </span>
                             ))
                           ) : (
-                            <span className="chip good">{t("k_105")}</span>
+                            <span className="chip good">{t("stable")}</span>
                           )}
                         </div>
 
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>{t("k_090")}</th>
-                              <th>{t("k_091")}</th>
-                              <th>{t("k_092")}</th>
-                              <th>{t("k_103")}</th>
+                              <th>{t("subject")}</th>
+                              <th>{t("current_score")}</th>
+                              <th>{t("trend")}</th>
+                              <th>{t("status")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -321,9 +321,9 @@ export function ClassesPage() {
                                 </td>
                                 <td>
                                   {subject.risk ? (
-                                    <span className="chip warn">{t("k_104")}</span>
+                                    <span className="chip warn">{t("need_support")}</span>
                                   ) : (
-                                    <span className="chip good">{t("k_105")}</span>
+                                    <span className="chip good">{t("stable")}</span>
                                   )}
                                 </td>
                               </tr>
@@ -333,26 +333,26 @@ export function ClassesPage() {
                       </div>
 
                       <div className="class-profile-side">
-                        <StatCard title={t("k_175")} value={shortName(selectedStudent.fullName)} icon={UserRound} />
-                        <StatCard title={t("k_071")} value={selectedStudent.averageScore.toFixed(1)} icon={BarChart3} />
-                        <StatCard title={t("k_074")} value={selectedStudent.weakSubjects.length} tone="warn" icon={AlertTriangle} />
-                        <StatCard title={t("k_169")} value={classStudents.length} icon={BookOpenCheck} />
+                        <StatCard title={t("student_in_focus")} value={shortName(selectedStudent.fullName)} icon={UserRound} />
+                        <StatCard title={t("average_score")} value={selectedStudent.averageScore.toFixed(1)} icon={BarChart3} />
+                        <StatCard title={t("weak_subjects")} value={selectedStudent.weakSubjects.length} tone="warn" icon={AlertTriangle} />
+                        <StatCard title={t("students_in_class")} value={classStudents.length} icon={BookOpenCheck} />
                       </div>
                     </motion.div>
                   ) : (
-                    <p>{t("k_177")}</p>
+                    <p>{t("select_student_from_list")}</p>
                   )}
                 </Section>
 
                 {selectedStudent ? (
-                  <Section title={t("k_174")}>
-                    <StudentHistoryChart progress={selectedStudent.progress} scoreLabel={t("k_102")} />
+                  <Section title={t("performance_student_by_subjects")}>
+                    <StudentHistoryChart progress={selectedStudent.progress} scoreLabel={t("score")} />
                   </Section>
                 ) : null}
               </>
             ) : (
-              <Section title={t("k_165")}>
-                <p>{t("k_172")}</p>
+              <Section title={t("overview_class")}>
+                <p>{t("select_class_for_view_analytics")}</p>
               </Section>
             )}
           </>

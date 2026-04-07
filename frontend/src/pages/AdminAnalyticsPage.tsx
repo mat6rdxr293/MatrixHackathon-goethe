@@ -20,32 +20,32 @@ export function AdminAnalyticsPage() {
         {data ? (
           <>
             <div className="stats-grid stats-grid-four">
-              <StatCard title={t("k_094")} value={data.schoolAverage.toFixed(2)} icon={BarChart3} />
-              <StatCard title={t("k_025")} value={data.totalUsers} icon={Users} />
-              <StatCard title={t("k_015")} value={data.eventsCount} icon={CalendarDays} />
-              <StatCard title={t("k_014")} value={data.achievementsCount} icon={Trophy} />
-              <StatCard title={t("k_139")} value={data.riskStudents} tone="warn" icon={AlertTriangle} />
+              <StatCard title={t("average_score_school")} value={data.schoolAverage.toFixed(2)} icon={BarChart3} />
+              <StatCard title={t("users")} value={data.totalUsers} icon={Users} />
+              <StatCard title={t("events")} value={data.eventsCount} icon={CalendarDays} />
+              <StatCard title={t("achievements")} value={data.achievementsCount} icon={Trophy} />
+              <StatCard title={t("at_risk_students")} value={data.riskStudents} tone="warn" icon={AlertTriangle} />
             </div>
 
-            <Section title={t("k_108")}>
+            <Section title={t("comparison_classes")}>
               <MetricBarChart
                 data={data.classComparison.map((item) => ({
                   label: item.classId,
                   value: item.avgScore,
                   tone: item.riskStudents.length > 0 ? ("warn" as const) : undefined,
                 }))}
-                valueLabel={t("k_102")}
+                valueLabel={t("score")}
               />
             </Section>
 
-            <Section title={t("k_108")}>
+            <Section title={t("comparison_classes")}>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>{t("k_083")}</th>
-                    <th>{t("k_002")}</th>
-                    <th>{t("k_102")}</th>
-                    <th>{t("k_139")}</th>
+                    <th>{t("class")}</th>
+                    <th>{t("teacher")}</th>
+                    <th>{t("score")}</th>
+                    <th>{t("at_risk_students")}</th>
                   </tr>
                 </thead>
                 <tbody>

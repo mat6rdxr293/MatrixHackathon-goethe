@@ -6,6 +6,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const certPairs = [
+  { cert: ".certs/localhost.pem", key: ".certs/localhost-key.pem" },
+  { cert: ".certs/cert.pem", key: ".certs/key.pem" },
+  { cert: ".certs/fullchain.pem", key: ".certs/privkey.pem" },
+  { cert: ".certs/localhost.crt", key: ".certs/localhost.key" },
   { cert: ".cert/localhost.pem", key: ".cert/localhost-key.pem" },
   { cert: ".cert/cert.pem", key: ".cert/key.pem" },
   { cert: ".cert/fullchain.pem", key: ".cert/privkey.pem" },
@@ -46,7 +50,7 @@ const resolvePreviewHttpsOptions = () => {
   }
 
   const pfxPath = process.env.PREVIEW_HTTPS_PFX_PATH;
-  const fallbackPfxPath = path.resolve(".cert/localhost-prod.pfx");
+  const fallbackPfxPath = path.resolve(".certs/localhost-prod.pfx");
   const resolvedPath = pfxPath ? path.resolve(pfxPath) : fallbackPfxPath;
   if (!fs.existsSync(resolvedPath)) {
     return undefined;

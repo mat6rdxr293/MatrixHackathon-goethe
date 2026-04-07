@@ -6,6 +6,7 @@
   Medal,
   Star,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -51,7 +52,7 @@ function SelfRoleProfile({ user }: { user: SafeUser }) {
         <div className="profile-simple-avatar">{initials(user.name)}</div>
         <div>
           <h2 className="profile-simple-name">{user.name}</h2>
-          <p className="profile-simple-role">{t("k_017")}</p>
+          <p className="profile-simple-role">{t("profile")}</p>
           <p className="profile-simple-email">{user.email}</p>
         </div>
       </div>
@@ -59,7 +60,7 @@ function SelfRoleProfile({ user }: { user: SafeUser }) {
   );
 }
 
-function BilimClassBindingCard() {
+function BilimClassBindingModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { t, lang } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -86,8 +87,24 @@ function BilimClassBindingCard() {
   };
 
   useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
     void loadStatus();
-  }, []);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -104,8 +121,8 @@ function BilimClassBindingCard() {
       setLogin(response.data.login ?? login.trim());
       setSuccess(
         response.data.accountName
-          ? `${t("k_360")}: ${response.data.accountName}`
-          : t("k_360"),
+          ? `${t("bilimclass_link_success")}: ${response.data.accountName}`
+          : t("bilimclass_link_success"),
       );
     } catch (err) {
       setFormError(getErrorMessage(err));
@@ -122,7 +139,7 @@ function BilimClassBindingCard() {
       const response = await privateApi.delete<BilimBindingStatusResponse>("/api/profile/bilimclass");
       setStatus(response.data);
       setPassword("");
-      setSuccess(t("k_361"));
+      setSuccess(t("bilimclass_link_removed"));
     } catch (err) {
       setFormError(getErrorMessage(err));
     } finally {
@@ -130,74 +147,103 @@ function BilimClassBindingCard() {
     }
   };
 
+  if (!isOpen) {
+    return null;
+  }
+
   return (
-    <section className="section-card profile-bilim-card">
-      <div className="section-head">
-        <h3>{t("k_355")}</h3>
-        <span className={status?.linked ? "chip good" : "chip"}>
-          {status?.linked ? t("k_356") : t("k_357")}
-        </span>
-      </div>
-      <p className="profile-bilim-sub">{t("k_358")}</p>
+    <>
+      <button className="users-modal-backdrop show" type="button" onClick={onClose} aria-label={t("close")} />
+      <aside className="users-modal profile-bilim-modal open" aria-hidden={false}>
+        <header className="users-modal-head">
+          <div>
+            <h3>{t("bilimclass_link_title")}</h3>
+            <p className="profile-bilim-sub">{t("bilimclass_link_description")}</p>
+          </div>
+          <button className="icon-btn users-modal-close" type="button" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </header>
 
-      {status?.linked ? (
-        <div className="profile-bilim-meta">
-          <span className="chip">{status.login ?? "-"}</span>
-          {status.linkedAt ? (
-            <span className="muted-inline">
-              {t("k_331")}: {formatDate(status.linkedAt, lang)}
-            </span>
-          ) : null}
+        <div className="section-head">
+          <span className={status?.linked ? "chip good" : "chip"}>
+            {status?.linked ? t("connected") : t("not_connected")}
+          </span>
         </div>
-      ) : null}
 
-      <DataState loading={loading} error={loadError} onRetry={loadStatus} />
-
-      {!loading ? (
-        <form className="admin-form profile-bilim-form" onSubmit={submit}>
-          <label>
-            {t("k_067")}
-            <input
-              type="text"
-              value={login}
-              onChange={(event) => setLogin(event.target.value)}
-              placeholder="student@bilimclass.kz"
-              autoComplete="username"
-              required
-            />
-          </label>
-          <label>
-            {t("k_188")}
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-
-          <div className="action-row">
-            <button className="solid-button" type="submit" disabled={saving || unlinking}>
-              {saving ? t("k_151") : status?.linked ? t("k_359") : t("k_362")}
-            </button>
-            {status?.linked ? (
-              <button className="outline-button" type="button" onClick={disconnect} disabled={saving || unlinking}>
-                {unlinking ? t("k_151") : t("k_361")}
-              </button>
+        {status?.linked ? (
+          <div className="profile-bilim-meta">
+            <span className="chip">{status.login ?? "-"}</span>
+            {status.linkedAt ? (
+              <span className="muted-inline">
+                {t("last_sync")}: {formatDate(status.linkedAt, lang)}
+              </span>
             ) : null}
           </div>
+        ) : null}
 
-          {formError ? <p className="form-error">{formError}</p> : null}
-          {success ? <p className="success-text">{success}</p> : null}
-        </form>
-      ) : null}
-    </section>
+        <DataState loading={loading} error={loadError} onRetry={loadStatus} />
+
+        {!loading ? (
+          <form className="admin-form profile-bilim-form" onSubmit={submit}>
+            <label>
+              {t("email_label")}
+              <input
+                type="text"
+                value={login}
+                onChange={(event) => setLogin(event.target.value)}
+                placeholder="student@bilimclass.kz"
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label>
+              {t("password_field")}
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+              />
+            </label>
+
+            <div className="action-row">
+              <button className="solid-button" type="submit" disabled={saving || unlinking}>
+                {saving
+                  ? t("publishing")
+                  : status?.linked
+                    ? t("refresh_bilimclass_link_button")
+                    : t("connect_bilimclass_button")}
+              </button>
+              {status?.linked ? (
+                <button className="outline-button" type="button" onClick={disconnect} disabled={saving || unlinking}>
+                  {unlinking ? t("publishing") : t("unlink_bilimclass_button")}
+                </button>
+              ) : null}
+            </div>
+
+            {formError ? <p className="form-error">{formError}</p> : null}
+            {success ? <p className="success-text">{success}</p> : null}
+          </form>
+        ) : null}
+      </aside>
+    </>
   );
 }
 
-function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: boolean }) {
+function StudentProfilePanel({
+  studentId,
+  isOwn,
+  canOpenBilimBinding,
+  onOpenBilimBinding,
+}: {
+  studentId: string;
+  isOwn: boolean;
+  canOpenBilimBinding?: boolean;
+  onOpenBilimBinding?: () => void;
+}) {
   const navigate = useNavigate();
   const { t, lang } = useI18n();
   const [tab, setTab] = useState<ProfileTab>("overview");
@@ -213,7 +259,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
     }
 
     const base = data.attendancePercent;
-    const months = [t("k_271"), t("k_272"), t("k_273"), t("k_274"), t("k_275"), t("k_276")];
+    const months = [t("oct"), t("nov"), t("dec"), t("jan"), t("feb"), t("mar")];
     return months.map((month, index) => ({
       month,
       percent: Math.max(80, Math.min(99, base - 4 + index)),
@@ -225,7 +271,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
       {!isOwn ? (
         <button className="outline-button icon-button profile-back" type="button" onClick={() => navigate(-1)}>
           <ArrowLeft size={15} />
-          {t("k_154")}
+          {t("back_in_room")}
         </button>
       ) : null}
 
@@ -236,26 +282,35 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
           <section className="student-profile-hero">
             <div className="student-profile-avatar">{initials(data.student.fullName)}</div>
             <div className="student-profile-headline">
-              <h2>{data.student.fullName}</h2>
-              <p>
-                {t("k_083")} {data.student.classId} · ID: {data.student.studentId}
-              </p>
+              <div className="student-profile-title-row">
+                <div>
+                  <h2>{data.student.fullName}</h2>
+                  <p>
+                    {t("class")} {data.student.classId} · ID: {data.student.studentId}
+                  </p>
+                </div>
+                {canOpenBilimBinding ? (
+                  <button className="profile-bilim-open-button" type="button" onClick={onOpenBilimBinding}>
+                    {t("bilimclass_link_title")}
+                  </button>
+                ) : null}
+              </div>
               <div className="student-profile-topstats">
                 <div>
                   <strong>{data.student.averageScore.toFixed(1)}</strong>
-                  <span>{t("k_277")}</span>
+                  <span>{t("average")}</span>
                 </div>
                 <div>
                   <strong>{data.achievements.length}</strong>
-                  <span>{t("k_278")}</span>
+                  <span>{t("achievements_2")}</span>
                 </div>
                 <div>
                   <strong>{data.attendancePercent}%</strong>
-                  <span>{t("k_279")}</span>
+                  <span>{t("attendance")}</span>
                 </div>
                 <div>
                   <strong>{data.rank ? `#${data.rank}` : "—"}</strong>
-                  <span>{t("k_280")}</span>
+                  <span>{t("place")}</span>
                 </div>
               </div>
               <div className="chip-row">
@@ -266,7 +321,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                     </span>
                   ))
                 ) : (
-                  <span className="chip good">{t("k_281")}</span>
+                  <span className="chip good">{t("all_good")}</span>
                 )}
               </div>
             </div>
@@ -274,11 +329,11 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
 
           <div className="student-profile-tabs">
             {[
-              ["overview", t("k_282")],
-              ["grades", t("k_283")],
-              ["attendance", t("k_279")],
-              ["achievements", t("k_014")],
-              ["ai", t("k_284")],
+              ["overview", t("overview")],
+              ["grades", t("grades")],
+              ["attendance", t("attendance")],
+              ["achievements", t("achievements")],
+              ["ai", t("ai_review")],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -293,7 +348,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
 
           {tab === "overview" ? (
             <div className="student-profile-grid">
-              <Section title={t("k_029")}>
+              <Section title={t("performance")}>
                 <div className="subject-bars-list">
                   {data.student.progress.map((subject) => {
                     const width = Math.min(100, Math.round((subject.current / 5) * 100));
@@ -311,35 +366,35 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                   })}
                 </div>
                 <div className="profile-history-wrap">
-                  <StudentHistoryChart progress={data.student.progress} scoreLabel={t("k_102")} />
+                  <StudentHistoryChart progress={data.student.progress} scoreLabel={t("score")} />
                 </div>
               </Section>
 
               <div className="student-profile-side">
                 <div className="student-mini-cards">
                   <article className="student-mini-card">
-                    <p>{t("k_285")}</p>
+                    <p>{t("position")}</p>
                     <strong>{data.rank ? `#${data.rank}` : "—"}</strong>
-                    <span>{t("k_286")}</span>
+                    <span>{t("in_school")}</span>
                   </article>
                   <article className="student-mini-card">
-                    <p>{t("k_287")}</p>
+                    <p>{t("points")}</p>
                     <strong>{data.points}</strong>
                     <span>XP</span>
                   </article>
                   <article className="student-mini-card">
-                    <p>{t("k_306")}</p>
+                    <p>{t("streak")}</p>
                     <strong>{data.streakDays}</strong>
-                    <span>{t("k_288")}</span>
+                    <span>{t("days")}</span>
                   </article>
                   <article className="student-mini-card">
-                    <p>{t("k_289")}</p>
+                    <p>{t("attendance_2")}</p>
                     <strong>{data.attendancePercent}%</strong>
-                    <span>{t("k_290")}</span>
+                    <span>{t("for_month")}</span>
                   </article>
                 </div>
 
-                <Section title={t("k_291")}>
+                <Section title={t("recent_grades")}>
                   <div className="recent-grade-list">
                     {data.recentGrades.slice(0, 6).map((grade) => (
                       <div key={`${grade.subject}-${grade.date}-${grade.score}`} className="recent-grade-item">
@@ -354,7 +409,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                 </Section>
               </div>
 
-              <Section title={t("k_014")}>
+              <Section title={t("achievements")}>
                 <div className="achievement-stack">
                   {data.achievements.slice(0, 3).map((item) => (
                     <article key={item.id} className="achievement-stack-item">
@@ -373,17 +428,17 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
               <section className="profile-ai-panel">
                 <h3>
                   <Brain size={16} />
-                  {t("k_292")}
+                  {t("ai_analytics")}
                 </h3>
-                <p className="profile-ai-sub">{t("k_293")}</p>
+                <p className="profile-ai-sub">{t("personal_review_data")}</p>
                 <div className="profile-ai-risk">{data.ai.riskLabel}</div>
                 <p>{data.ai.summary}</p>
                 <div className="profile-ai-box">
-                  <small>{t("k_294")}</small>
+                  <small>{t("action")}</small>
                   <span>{data.ai.action}</span>
                 </div>
                 <div className="profile-ai-box">
-                  <small>{t("k_295")}</small>
+                  <small>{t("option")}</small>
                   <span>{data.ai.opportunity}</span>
                 </div>
               </section>
@@ -391,14 +446,14 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
           ) : null}
 
           {tab === "grades" ? (
-            <Section title={t("k_296")}>
+            <Section title={t("all_grades_by_subjects")}>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>{t("k_090")}</th>
-                    <th>{t("k_297")}</th>
-                    <th>{t("k_092")}</th>
-                    <th>{t("k_103")}</th>
+                    <th>{t("subject")}</th>
+                    <th>{t("current")}</th>
+                    <th>{t("trend")}</th>
+                    <th>{t("status")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -412,9 +467,9 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                       </td>
                       <td>
                         {subject.risk ? (
-                          <span className="chip warn">{t("k_198")}</span>
+                          <span className="chip warn">{t("risk")}</span>
                         ) : (
-                          <span className="chip good">{t("k_298")}</span>
+                          <span className="chip good">{t("normal")}</span>
                         )}
                       </td>
                     </tr>
@@ -426,7 +481,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
 
           {tab === "attendance" ? (
             <div className="student-profile-grid compact">
-              <Section title={t("k_299")}>
+              <Section title={t("attendance_by_months")}>
                 <div className="attendance-months">
                   {attendanceByMonth.map((item) => (
                     <div key={item.month} className="attendance-month-item">
@@ -442,22 +497,22 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
                 </div>
               </Section>
 
-              <Section title={t("k_300")}>
+              <Section title={t("summary")}>
                 <div className="attendance-summary">
                   <div>
                     <CalendarCheck size={16} />
                     <strong>{data.attendancePercent}%</strong>
-                    <span>{t("k_301")}</span>
+                    <span>{t("average_attendance")}</span>
                   </div>
                   <div>
                     <Flame size={16} />
                     <strong>{data.streakDays}</strong>
-                    <span>{t("k_302")}</span>
+                    <span>{t("days_without_absences")}</span>
                   </div>
                   <div>
                     <TrendingUp size={16} />
                     <strong>{Math.max(0, 100 - data.student.weakSubjects.length * 8)}%</strong>
-                    <span>{t("k_303")}</span>
+                    <span>{t("study_stability")}</span>
                   </div>
                 </div>
               </Section>
@@ -465,10 +520,10 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
           ) : null}
 
           {tab === "achievements" ? (
-            <Section title={t("k_304")}>
+            <Section title={t("all_achievements")}>
               <div className="achievement-stack">
                 {data.achievements.length === 0 ? (
-                  <p className="muted-inline">{t("k_305")}</p>
+                  <p className="muted-inline">{t("achievements_yet_none")}</p>
                 ) : (
                   data.achievements.map((item) => (
                     <article key={item.id} className="achievement-stack-item">
@@ -493,17 +548,17 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
             <section className="profile-ai-panel standalone">
               <h3>
                 <Brain size={16} />
-                {t("k_292")}
+                {t("ai_analytics")}
               </h3>
-              <p className="profile-ai-sub">{t("k_293")}</p>
+              <p className="profile-ai-sub">{t("personal_review_data")}</p>
               <div className="profile-ai-risk">{data.ai.riskLabel}</div>
               <p>{data.ai.summary}</p>
               <div className="profile-ai-box">
-                <small>{t("k_294")}</small>
+                <small>{t("action")}</small>
                 <span>{data.ai.action}</span>
               </div>
               <div className="profile-ai-box">
-                <small>{t("k_295")}</small>
+                <small>{t("option")}</small>
                 <span>{data.ai.opportunity}</span>
               </div>
             </section>
@@ -517,6 +572,7 @@ function StudentProfilePanel({ studentId, isOwn }: { studentId: string; isOwn: b
 export function ProfilePage() {
   const { user } = useAuth();
   const { studentId: routeStudentId } = useParams();
+  const [isBilimModalOpen, setBilimModalOpen] = useState(false);
 
   const ownStudentId = useMemo(() => {
     if (!user) return null;
@@ -526,18 +582,26 @@ export function ProfilePage() {
   }, [user]);
 
   const targetStudentId = routeStudentId ?? ownStudentId;
+  const canOpenBilimBinding = Boolean(user && !routeStudentId && user.role === "student");
 
   return (
     <PageTransition>
       <div className="page-layout profile-page">
         {user ? (
           <>
-            {!routeStudentId ? <BilimClassBindingCard /> : null}
             {targetStudentId ? (
-              <StudentProfilePanel studentId={targetStudentId} isOwn={!routeStudentId} />
+              <StudentProfilePanel
+                studentId={targetStudentId}
+                isOwn={!routeStudentId}
+                canOpenBilimBinding={canOpenBilimBinding}
+                onOpenBilimBinding={() => setBilimModalOpen(true)}
+              />
             ) : (
               <SelfRoleProfile user={user} />
             )}
+            {canOpenBilimBinding ? (
+              <BilimClassBindingModal isOpen={isBilimModalOpen} onClose={() => setBilimModalOpen(false)} />
+            ) : null}
           </>
         ) : null}
       </div>

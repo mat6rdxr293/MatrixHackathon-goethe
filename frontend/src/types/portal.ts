@@ -173,6 +173,57 @@ export type ProgressResponse =
   | TeacherProgressResponse
   | AdminProgressResponse;
 
+export type JournalGrade = {
+  id: string;
+  studentId: string;
+  eduYear: number;
+  period: number;
+  periodType: string;
+  subjectId?: number;
+  subjectUuid?: string;
+  subjectName: string;
+  scheduleUuid?: string;
+  lessonDate: string;
+  lessonTime?: string;
+  markType?: string;
+  markMax?: number;
+  scoreRaw: string;
+  scoreFive?: number;
+  syncedAt: string;
+};
+
+export type JournalSubjectSummary = {
+  subjectId: number | null;
+  subjectUuid: string | null;
+  subjectName: string;
+  averageScore: number | null;
+  gradesCount: number;
+  finalMark: string | null;
+};
+
+export type StudentJournalResponse = {
+  role: "student" | "parent";
+  source: "bilimclass" | "cache" | "empty";
+  studentId: string;
+  selected: {
+    eduYear: number;
+    period: number;
+    periodType: string;
+  };
+  filters: {
+    years: number[];
+    periods: number[];
+    periodTypes: string[];
+  };
+  stats: {
+    subjects: number;
+    grades: number;
+    lastSyncAt: string | null;
+  };
+  subjects: JournalSubjectSummary[];
+  grades: JournalGrade[];
+};
+
 export type AchievementsResponse = {
   role: Role;
   items: Achievement[];
@@ -369,6 +420,89 @@ export type ClassReportResponse = {
   recommendations: string[];
 };
 
+export type SubjectPracticeQuestionType =
+  | "single_choice"
+  | "multiple_choice"
+  | "short_answer"
+  | "matching"
+  | "ordering";
+
+export type SubjectPracticeOption = {
+  id: string;
+  text: string;
+};
+
+export type SubjectPracticePair = {
+  leftId: string;
+  rightId: string;
+};
+
+export type SubjectPracticeQuestionBase = {
+  id: string;
+  subject: string;
+  prompt: string;
+  explanation?: string;
+  sortOrder: number;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SubjectPracticeSingleChoiceQuestion = SubjectPracticeQuestionBase & {
+  type: "single_choice";
+  options: SubjectPracticeOption[];
+  correctOptionId: string;
+};
+
+export type SubjectPracticeShortAnswerQuestion = SubjectPracticeQuestionBase & {
+  type: "short_answer";
+  acceptedAnswers: string[];
+};
+
+export type SubjectPracticeMultipleChoiceQuestion = SubjectPracticeQuestionBase & {
+  type: "multiple_choice";
+  options: SubjectPracticeOption[];
+  correctOptionIds: string[];
+};
+
+export type SubjectPracticeMatchingQuestion = SubjectPracticeQuestionBase & {
+  type: "matching";
+  leftItems: SubjectPracticeOption[];
+  rightItems: SubjectPracticeOption[];
+  correctPairs: SubjectPracticePair[];
+};
+
+export type SubjectPracticeOrderingQuestion = SubjectPracticeQuestionBase & {
+  type: "ordering";
+  items: SubjectPracticeOption[];
+  correctOrder: string[];
+};
+
+export type SubjectPracticeQuestion =
+  | SubjectPracticeSingleChoiceQuestion
+  | SubjectPracticeMultipleChoiceQuestion
+  | SubjectPracticeShortAnswerQuestion
+  | SubjectPracticeMatchingQuestion
+  | SubjectPracticeOrderingQuestion;
+
+export type SubjectPracticeAnswerInput =
+  | { type: "single_choice"; optionId: string }
+  | { type: "multiple_choice"; optionIds: string[] }
+  | { type: "short_answer"; text: string }
+  | { type: "matching"; pairs: SubjectPracticePair[] }
+  | { type: "ordering"; order: string[] };
+
+export type SubjectPracticeSubmissionResponse = {
+  total: number;
+  correct: number;
+  score: number;
+  items: Array<{
+    questionId: string;
+    correct: boolean;
+    feedback: string;
+  }>;
+};
+
 export type AiChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -400,6 +534,19 @@ export type AiChatRequest = {
       };
       teacherTopRisks?: string[];
       adminTopRiskClasses?: string[];
+      journal?: {
+        selected?: {
+          eduYear?: number;
+          period?: number;
+          periodType?: string;
+        };
+        source?: "bilimclass" | "cache" | "empty";
+        subjects?: number;
+        grades?: number;
+        topSubjects?: string[];
+        recentGrades?: string[];
+        lastSyncAt?: string | null;
+      };
     };
   };
 };

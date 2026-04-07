@@ -85,7 +85,7 @@ MODEL = AutoModelForCausalLM.from_pretrained(
 if DEVICE == "cpu":
     MODEL.to("cpu")
 
-APP = FastAPI(title="Aqbobek Local LLM", version="1.0.0")
+APP = FastAPI(title="Matrix Education Local LLM", version="1.0.0")
 
 
 def build_prompt(request: GenerateRequest) -> str:

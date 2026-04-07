@@ -18,6 +18,8 @@ import { NotificationsPage } from "../pages/NotificationsPage";
 import { ProfilePage } from "../pages/ProfilePage";
 import { ProgressPage } from "../pages/ProgressPage";
 import { SchedulePage } from "../pages/SchedulePage";
+import { SubjectsPage } from "../pages/SubjectsPage";
+import { SubjectPage } from "../pages/SubjectPage";
 
 export function AppRoutes() {
   const location = useLocation();
@@ -42,6 +44,8 @@ export function AppRoutes() {
             <Route path="ai-mentor" element={<AiMentorPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="students/:studentId" element={<ProfilePage />} />
+            <Route path="subjects" element={<SubjectsPage />} />
+            <Route path="subjects/:subjectId" element={<SubjectPage />} />
 
             <Route element={<RoleRoute roles={["teacher", "admin"]} />}>
               <Route path="classes" element={<ClassesPage />} />

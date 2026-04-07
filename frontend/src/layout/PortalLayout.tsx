@@ -66,7 +66,7 @@ export function PortalLayout() {
         type="button"
         className={sidebarOpen ? "portal-overlay show" : "portal-overlay"}
         onClick={() => setSidebarOpen(false)}
-        aria-label={t("k_042")}
+        aria-label={t("logout_button")}
       />
 
       <aside className={["portal-sidebar", sidebarOpen ? "open" : "", sidebarCollapsed ? "collapsed" : ""].filter(Boolean).join(" ")}>
@@ -75,14 +75,14 @@ export function PortalLayout() {
             <School size={16} />
           </div>
           <div className="sidebar-brand-text">
-            <h2>Aqbobek Lyceum</h2>
-            <p>{t("k_039")}</p>
+            <h2>Matrix Education</h2>
+            <p>{t("single_school_portal")}</p>
           </div>
           <button
             className="sidebar-collapse-btn"
             type="button"
             onClick={toggleCollapse}
-            title={sidebarCollapsed ? t("k_241") : t("k_242")}
+            title={sidebarCollapsed ? t("expand") : t("collapse")}
           >
             {sidebarCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
           </button>
@@ -96,7 +96,7 @@ export function PortalLayout() {
           </div>
         </div>
 
-        <p className="sidebar-section-label">{t("k_040")}</p>
+        <p className="sidebar-section-label">{t("portal_lyceum")}</p>
 
         <nav className="side-nav">
           {menu.map((item) => {
@@ -118,11 +118,11 @@ export function PortalLayout() {
         </nav>
 
         <div className="sidebar-footer">
-          <button className="side-link side-link-logout" type="button" onClick={logout} title={sidebarCollapsed ? t("k_042") : undefined}>
+          <button className="side-link side-link-logout" type="button" onClick={logout} title={sidebarCollapsed ? t("logout_button") : undefined}>
             <span className="side-link-icon">
               <LogOut size={15} />
             </span>
-            <span className="side-link-text">{t("k_042")}</span>
+            <span className="side-link-text">{t("logout_button")}</span>
           </button>
         </div>
       </aside>
@@ -134,13 +134,13 @@ export function PortalLayout() {
               type="button"
               className="icon-btn mobile-btn"
               onClick={() => setSidebarOpen((prev) => !prev)}
-              aria-label={sidebarOpen ? t("k_042") : t("k_040")}
+              aria-label={sidebarOpen ? t("logout_button") : t("portal_lyceum")}
             >
               {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
             </button>
             <div>
               <div className="topbar-breadcrumb">
-                <span>{t("k_040")}</span>
+                <span>{t("portal_lyceum")}</span>
                 <ChevronRight size={13} />
                 <strong>{title}</strong>
               </div>
@@ -157,7 +157,7 @@ export function PortalLayout() {
             {user.role === "admin" ? (
               <button className="outline-button icon-button" type="button" onClick={() => navigate("/kiosk")}>
                 <MonitorPlay size={16} />
-                {t("k_041")}
+                {t("open_wallboard")}
               </button>
             ) : null}
             <div className="user-chip">

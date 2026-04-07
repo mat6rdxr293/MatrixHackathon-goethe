@@ -34,10 +34,10 @@ export function LoginPage() {
 
   const rolePreview = useMemo<RolePreview[]>(
     () => [
-      { value: "student", label: t("k_001"), icon: GraduationCap },
-      { value: "teacher", label: t("k_002"), icon: UserRound },
-      { value: "parent", label: t("k_003"), icon: UsersRound },
-      { value: "admin", label: t("k_004"), icon: ShieldCheck },
+      { value: "student", label: t("student"), icon: GraduationCap },
+      { value: "teacher", label: t("teacher"), icon: UserRound },
+      { value: "parent", label: t("parent"), icon: UsersRound },
+      { value: "admin", label: t("administration"), icon: ShieldCheck },
     ],
     [t],
   );
@@ -46,7 +46,7 @@ export function LoginPage() {
     event.preventDefault();
     setError(null);
     if (!selectedRole) {
-      setError(t("k_066"));
+      setError(t("select_role_or_enter_data_manually"));
       return;
     }
     setLoading(true);
@@ -74,16 +74,16 @@ export function LoginPage() {
                 <School size={22} />
               </div>
               <div>
-                <h1 className="login-title">Aqbobek Portal</h1>
-                <p className="login-subtitle">{t("k_039")}</p>
+                <h1 className="login-title">Matrix Education</h1>
+                <p className="login-subtitle">{t("single_school_portal")}</p>
               </div>
             </div>
             <LanguageSwitch />
           </div>
 
-          <p className="login-description">{t("k_066")}</p>
+          <p className="login-description">{t("select_role_or_enter_data_manually")}</p>
 
-          <div className="role-preview-grid" role="radiogroup" aria-label={t("k_046")}>
+          <div className="role-preview-grid" role="radiogroup" aria-label={t("roles_in_system")}>
             {rolePreview.map((item) => {
               const Icon = item.icon;
               return (
@@ -110,11 +110,11 @@ export function LoginPage() {
           {selectedRole ? (
             <form className="login-form" onSubmit={submit}>
               <label>
-                {t("k_067")}
+                {t("email_label")}
                 <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
               </label>
               <label>
-                {t("k_068")}
+                {t("password_label")}
                 <input
                   type="password"
                   value={password}
@@ -124,7 +124,7 @@ export function LoginPage() {
               </label>
               {error ? <p className="form-error">{error}</p> : null}
               <button className="solid-button" type="submit" disabled={loading}>
-                {loading ? t("k_069") : t("k_070")}
+                {loading ? t("login_loading") : t("login_button")}
               </button>
             </form>
           ) : null}

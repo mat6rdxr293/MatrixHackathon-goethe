@@ -56,7 +56,7 @@ export function SchedulePage() {
         {data ? (
           <>
             <Section
-              title={t("k_205")}
+              title={t("schedule")}
               action={
                 <div className="chip-group">
                   <button
@@ -64,7 +64,7 @@ export function SchedulePage() {
                     className={dayFilter === "all" ? "chip-button active" : "chip-button"}
                     onClick={() => setDayFilter("all")}
                   >
-                    {t("k_109")}
+                    {t("all")}
                   </button>
                   {[1, 2, 3, 4, 5, 6].map((day) => (
                     <button
@@ -81,18 +81,18 @@ export function SchedulePage() {
             >
               <div className="chip-row">
                 <span className="chip">
-                  {t("k_015")}: {items.length}
+                  {t("events")}: {items.length}
                 </span>
                 <span className="chip warn">
-                  {t("k_206")}: {byStatus.changed}
+                  {t("replacement")}: {byStatus.changed}
                 </span>
                 <span className="chip bad">
-                  {t("k_207")}: {byStatus.cancelled}
+                  {t("cancelled")}: {byStatus.cancelled}
                 </span>
               </div>
             </Section>
 
-            <Section title={t("k_205")}> 
+            <Section title={t("schedule")}> 
               {items.length > 0 ? (
                 <div className="schedule-day-grid">
                   {groupedByDay.map(([day, dayItems]) => (
@@ -111,15 +111,15 @@ export function SchedulePage() {
                                 {item.groupName ? <span className="muted-inline"> ({item.groupName})</span> : null}
                               </strong>
                               <div className="schedule-lesson-meta">
-                                <span>{t("k_182")}: {item.teacherId}</span>
-                                <span>{t("k_209")}: {item.room}</span>
-                                <span>{t("k_083")}: {item.classId}</span>
+                                <span>{t("curator")}: {item.teacherId}</span>
+                                <span>{t("room")}: {item.room}</span>
+                                <span>{t("class")}: {item.classId}</span>
                               </div>
                             </div>
                             <div>
-                              {item.status === "planned" ? <span className="chip good">{t("k_237")}</span> : null}
-                              {item.status === "changed" ? <span className="chip warn">{t("k_206")}</span> : null}
-                              {item.status === "cancelled" ? <span className="chip bad">{t("k_207")}</span> : null}
+                              {item.status === "planned" ? <span className="chip good">{t("by_plan")}</span> : null}
+                              {item.status === "changed" ? <span className="chip warn">{t("replacement")}</span> : null}
+                              {item.status === "cancelled" ? <span className="chip bad">{t("cancelled")}</span> : null}
                             </div>
                           </div>
                         ))}
@@ -130,7 +130,7 @@ export function SchedulePage() {
               ) : (
                 <div className="empty-state-inline">
                   <CalendarClock size={18} />
-                  <span>{t("k_210")}</span>
+                  <span>{t("schedule_yet_not_filled")}</span>
                 </div>
               )}
             </Section>

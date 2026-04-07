@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authMiddleware, requireRoles } from "../middleware/auth";
 import { analyticsService } from "../services/analyticsService";
 import { academicStoreService } from "../services/academicStoreService";
+import { bilimClassService } from "../services/bilimClassService";
 import { notificationService } from "../services/notificationService";
 import { scheduleService } from "../services/scheduleService";
 import { scheduleStoreService } from "../services/scheduleStoreService";
@@ -108,6 +109,10 @@ const teacherAbsenceSchema = z.object({
   day: z.number().int().min(1).max(7),
   slots: z.array(z.number().int().min(1).max(12)).min(1),
   reason: z.string().trim().min(2).optional(),
+});
+
+const scheduleSubjectsImportQuerySchema = z.object({
+  classId: z.string().trim().min(2).max(12).optional(),
 });
 
 export const adminRoutes = Router();
@@ -310,6 +315,21 @@ adminRoutes.post("/schedule/generate", async (req, res) => {
     res.status(201).json(generated);
   } catch {
     res.status(500).json({ message: "Не удалось собрать расписание" });
+  }
+});
+
+adminRoutes.get("/schedule/import-subjects", async (req, res) => {
+  const parsed = scheduleSubjectsImportQuerySchema.safeParse(req.query ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "Неверные параметры запроса", errors: parsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const result = await bilimClassService.importScheduleSubjects(parsed.data.classId);
+    res.json(result);
+  } catch {
+    res.status(502).json({ message: "Не удалось импортировать предметы из BilimClass" });
   }
 });
 

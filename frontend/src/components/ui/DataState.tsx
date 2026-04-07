@@ -16,7 +16,7 @@ export function DataState({
     return (
       <div className="state-box">
         <LoaderCircle className="spin" size={16} />
-        <p>{t("k_037")}</p>
+        <p>{t("loading_data")}</p>
       </div>
     );
   }
@@ -27,7 +27,7 @@ export function DataState({
         <AlertCircle size={16} />
         <p>{error}</p>
         <button className="outline-button" type="button" onClick={() => void onRetry()}>
-          {t("k_038")}
+          {t("retry_button")}
         </button>
       </div>
     );

@@ -65,7 +65,7 @@ export const buildExplainabilityDrivers = (
   );
 
   const combinedDrivers = [
-    "Rule-based аналитика: скоринг и причины считаются локально (без LLM).",
+    "Алгоритмическая аналитика: скоринг и причины считаются локально (без языковой модели).",
     ...rankedReasons,
     ...extraDrivers,
   ].filter((item, index, array) => array.indexOf(item) === index);

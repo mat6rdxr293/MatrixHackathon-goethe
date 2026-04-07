@@ -1,4 +1,4 @@
-﻿import { BrainCircuit, FileText, MessageCircle, Send, ShieldAlert, WandSparkles } from "lucide-react";
+﻿import { FileText, MessageCircle, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../hooks/useI18n";
@@ -11,6 +11,7 @@ import type {
   AiMentorResponse,
   ClassReportResponse,
   PredictionsResponse,
+  StudentJournalResponse,
 } from "../types/portal";
 import { TrendBarChart } from "../components/charts/Charts";
 import { DataState } from "../components/ui/DataState";
@@ -22,14 +23,92 @@ const initialAssistantMessage = (text: string): AiChatMessage => ({
   content: text,
 });
 
-export function AiMentorPage() {
-  const { t } = useI18n();
-  const { user } = useAuth();
+type MentorScope = {
+  eduYear: number;
+  periodType: string;
+  period: number;
+};
 
-  const mentorState = useApiData<AiMentorResponse>("/api/ai-mentor");
+const normalizePeriodType = (value?: string | null) => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized.includes("quarter") || normalized.includes("четвер")) {
+    return "quarter";
+  }
+  if (normalized.includes("halfyear") || normalized.includes("semester") || normalized.includes("полугод")) {
+    return "halfyear";
+  }
+  if (normalized.includes("year") || normalized.includes("год")) {
+    return "year";
+  }
+  return normalized || "quarter";
+};
+
+const buildPeriodOptions = (periodType: string, fallback: number[]) => {
+  if (periodType === "quarter") {
+    return [1, 2, 3, 4];
+  }
+  if (periodType === "halfyear") {
+    return [1, 2];
+  }
+  if (periodType === "year") {
+    return [1];
+  }
+  return fallback.length > 0 ? fallback : [1, 2, 3, 4];
+};
+
+export function AiMentorPage() {
+  const { t, lang } = useI18n();
+  const { user } = useAuth();
+  const isScopedRole = user?.role === "student" || user?.role === "parent";
+
+  const journalPath = useMemo(() => {
+    if (!isScopedRole) {
+      return null;
+    }
+    const params = new URLSearchParams({ lang });
+    return `/api/journal?${params.toString()}`;
+  }, [isScopedRole, lang]);
+  const journalState = useApiData<StudentJournalResponse>(journalPath);
+  const [selectedScope, setSelectedScope] = useState<MentorScope | null>(null);
+
+  useEffect(() => {
+    const journal = journalState.data;
+    if (!journal) {
+      return;
+    }
+    setSelectedScope((prev) => {
+      if (
+        prev &&
+        prev.eduYear === journal.selected.eduYear &&
+        prev.period === journal.selected.period &&
+        normalizePeriodType(prev.periodType) === normalizePeriodType(journal.selected.periodType)
+      ) {
+        return prev;
+      }
+      return {
+        eduYear: journal.selected.eduYear,
+        period: journal.selected.period,
+        periodType: normalizePeriodType(journal.selected.periodType),
+      };
+    });
+  }, [journalState.data]);
+
+  const mentorPath = useMemo(() => {
+    if (!isScopedRole || !selectedScope) {
+      return `/api/ai-mentor?lang=${lang}`;
+    }
+    const params = new URLSearchParams({
+      eduYear: String(selectedScope.eduYear),
+      periodType: selectedScope.periodType,
+      period: String(selectedScope.period),
+      lang,
+    });
+    return `/api/ai-mentor?${params.toString()}`;
+  }, [isScopedRole, lang, selectedScope]);
+
+  const mentorState = useApiData<AiMentorResponse>(mentorPath);
   const predictionsState = useApiData<PredictionsResponse>("/api/predictions");
 
-  const [planCreated, setPlanCreated] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [report, setReport] = useState<ClassReportResponse | null>(null);
@@ -40,11 +119,14 @@ export function AiMentorPage() {
   const [chatMode, setChatMode] = useState<"openai" | "local" | "demo" | null>(null);
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [activeTab, setActiveTab] = useState<"analysis" | "chat">("analysis");
+  const [showAdvancedAnalysis, setShowAdvancedAnalysis] = useState(false);
+  const [showQuickPrompts, setShowQuickPrompts] = useState(false);
+  const [selectedTrendSubjects, setSelectedTrendSubjects] = useState<string[]>([]);
   const chatViewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (messages.length === 0) {
-      setMessages([initialAssistantMessage(t("k_227"))]);
+      setMessages([initialAssistantMessage(t("hello_i_ai_assistant_lyceum_ask_question_by_performance"))]);
     }
   }, [messages.length, t]);
 
@@ -75,19 +157,88 @@ export function AiMentorPage() {
   const weaknesses = mentorData?.weaknesses ?? mentorData?.weakSides ?? [];
 
   const quickPrompts = useMemo(
-    () => [t("k_228"), t("k_229"), t("k_230")],
+    () => [t("where_at_me_highest_high_risk"), t("build_plan_for_7_days"), t("what_discuss_with_teacher_parent")],
     [t],
   );
+
+  const availableYears = useMemo(() => {
+    if (!journalState.data?.filters.years?.length) {
+      return selectedScope ? [selectedScope.eduYear] : [];
+    }
+    return journalState.data.filters.years;
+  }, [journalState.data, selectedScope]);
+
+  const availablePeriodTypes = useMemo(() => {
+    const values = journalState.data?.filters.periodTypes ?? [];
+    const normalized = values.map((value) => normalizePeriodType(value)).filter(Boolean);
+    return normalized.length > 0 ? [...new Set(normalized)] : ["quarter", "halfyear"];
+  }, [journalState.data]);
+
+  const availablePeriods = useMemo(() => {
+    const fallback = journalState.data?.filters.periods ?? [];
+    return buildPeriodOptions(selectedScope?.periodType ?? "quarter", fallback);
+  }, [journalState.data, selectedScope?.periodType]);
 
   const currentMode = (activeTab === "chat" ? chatMode : null) ?? mentorData?.mode ?? null;
   const modeLabel =
     currentMode === "openai"
-      ? "OpenAI"
+      ? t("cloud_ai_mode")
       : currentMode === "local"
-        ? "Локальная LLM"
+        ? t("local_ai_mode")
         : currentMode === "demo"
-          ? "Demo"
+          ? t("demo_mode")
           : null;
+
+  const trendOptions = mentorData?.trends ?? [];
+
+  useEffect(() => {
+    if (trendOptions.length === 0) {
+      setSelectedTrendSubjects((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+
+    setSelectedTrendSubjects((prev) => {
+      const allowed = prev.filter((subject) => trendOptions.some((item) => item.subject === subject)).slice(0, 5);
+      if (allowed.length > 0) {
+        if (allowed.length === prev.length && allowed.every((item, index) => item === prev[index])) {
+          return prev;
+        }
+        return allowed;
+      }
+      const next = trendOptions
+        .slice()
+        .sort((a, b) => Math.abs(b.trend) - Math.abs(a.trend))
+        .slice(0, 5)
+        .map((item) => item.subject);
+      if (next.length === prev.length && next.every((item, index) => item === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
+  }, [trendOptions]);
+
+  const visibleTrends = useMemo(() => {
+    if (trendOptions.length === 0) {
+      return [];
+    }
+    const selected = trendOptions.filter((item) => selectedTrendSubjects.includes(item.subject));
+    if (selected.length > 0) {
+      return selected;
+    }
+    return trendOptions.slice(0, 5);
+  }, [selectedTrendSubjects, trendOptions]);
+
+  const toggleTrendSubject = (subject: string) => {
+    setSelectedTrendSubjects((prev) => {
+      if (prev.includes(subject)) {
+        return prev.filter((item) => item !== subject);
+      }
+      if (prev.length >= 5) {
+        return prev;
+      }
+      return [...prev, subject];
+    });
+  };
 
   const sendMessage = async (rawText?: string) => {
     const messageText = (rawText ?? chatInput).trim();
@@ -190,7 +341,7 @@ export function AiMentorPage() {
         ...prev,
         {
           role: "assistant",
-          content: t("k_231"),
+          content: t("not_failed_get_response_from_service_try_again_once"),
         },
       ]);
     } finally {
@@ -223,7 +374,7 @@ export function AiMentorPage() {
     <PageTransition>
       <div className="page-layout">
         <>
-          <div className="mentor-tabs chip-row" role="tablist" aria-label={t("k_353")}>
+          <div className="mentor-tabs chip-row" role="tablist" aria-label={t("analysis_tab")}>
               <button
                 className={`chip-button ${activeTab === "analysis" ? "active" : ""}`}
                 type="button"
@@ -231,7 +382,7 @@ export function AiMentorPage() {
                 aria-selected={activeTab === "analysis"}
                 onClick={() => setActiveTab("analysis")}
               >
-                {t("k_353")}
+                {t("analysis_tab")}
               </button>
               <button
                 className={`chip-button ${activeTab === "chat" ? "active" : ""}`}
@@ -240,24 +391,133 @@ export function AiMentorPage() {
                 aria-selected={activeTab === "chat"}
                 onClick={() => setActiveTab("chat")}
               >
-                {t("k_354")}
+                {t("ai_assistant_chat_tab")}
               </button>
               {modeLabel ? (
                 <span className={`chip ${currentMode === "demo" ? "warn" : currentMode === "openai" ? "good" : ""}`}>
-                  Режим: {modeLabel}
+                  {t("mode")}: {modeLabel}
                 </span>
               ) : null}
           </div>
 
+          {activeTab === "analysis" && isScopedRole && selectedScope ? (
+            <Section title={t("analysis_period_title")}>
+              <DataState
+                loading={journalState.loading}
+                error={journalState.error}
+                onRetry={journalState.refresh}
+              />
+              {!journalState.loading && !journalState.error ? (
+                <div className="action-row mentor-scope-row">
+                  <label className="mentor-scope-field">
+                    <span>{t("study_year")}</span>
+                    <select
+                      value={selectedScope.eduYear}
+                      onChange={(event) =>
+                        setSelectedScope((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                eduYear: Number(event.target.value),
+                              }
+                            : prev,
+                        )
+                      }
+                    >
+                      {availableYears.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="mentor-scope-field">
+                    <span>{t("type_period_type")}</span>
+                    <select
+                      value={selectedScope.periodType}
+                      onChange={(event) => {
+                        const nextType = normalizePeriodType(event.target.value);
+                        setSelectedScope((prev) => {
+                          if (!prev) {
+                            return prev;
+                          }
+                          const nextPeriods = buildPeriodOptions(nextType, journalState.data?.filters.periods ?? []);
+                          const nextPeriod = nextPeriods.includes(prev.period) ? prev.period : nextPeriods[0] ?? 1;
+                          return {
+                            ...prev,
+                            periodType: nextType,
+                            period: nextPeriod,
+                          };
+                        });
+                      }}
+                    >
+                      {availablePeriodTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {type === "quarter"
+                            ? t("period_type_quarter")
+                            : type === "halfyear"
+                              ? t("period_type_halfyear")
+                              : t("period_type_year")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="mentor-scope-field">
+                    <span>{t("period")}</span>
+                    <select
+                      value={selectedScope.period}
+                      onChange={(event) =>
+                        setSelectedScope((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                period: Number(event.target.value),
+                              }
+                            : prev,
+                        )
+                      }
+                    >
+                      {availablePeriods.map((period) => (
+                        <option key={period} value={period}>
+                          {selectedScope.periodType === "quarter"
+                            ? `${period} ${t("quarter_short")}`
+                            : selectedScope.periodType === "halfyear"
+                              ? `${period} ${t("halfyear_short")}`
+                              : t("year_period_single")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+            </Section>
+          ) : null}
+
             {activeTab === "chat" ? (
-              <Section title={t("k_232")}>
+              <Section title={t("ai_assistant_chat_title")}>
                 <div className="chat-shell">
                   <div className="chat-toolbar">
                     <div className="mentor-brand-line">
                       <MessageCircle size={16} />
-                      <span>{t("k_233")}</span>
+                      <span>{t("online_assistant")}</span>
                     </div>
-                    <div className="chip-row">
+                    <div className="mentor-chat-actions">
+                      <button
+                        className="chip-button"
+                        type="button"
+                        onClick={() => setShowQuickPrompts((prev) => !prev)}
+                      >
+                        {showQuickPrompts
+                          ? "\u0421\u043a\u0440\u044b\u0442\u044c \u043f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0438"
+                          : "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0438"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {showQuickPrompts ? (
+                    <div className="chip-row mentor-quick-prompts">
                       {quickPrompts.map((prompt) => (
                         <button
                           key={prompt}
@@ -270,7 +530,7 @@ export function AiMentorPage() {
                         </button>
                       ))}
                     </div>
-                  </div>
+                  ) : null}
 
                   <div className="chat-viewport" ref={chatViewportRef}>
                     {messages.map((message, index) => (
@@ -283,7 +543,7 @@ export function AiMentorPage() {
                     ))}
                     {chatLoading ? (
                       <div className="chat-bubble assistant">
-                        <span className="thinking-text">{t("k_240")}</span>
+                        <span className="thinking-text">{t("thinking_text")}</span>
                       </div>
                     ) : null}
                   </div>
@@ -298,12 +558,12 @@ export function AiMentorPage() {
                     <input
                       value={chatInput}
                       onChange={(event) => setChatInput(event.target.value)}
-                      placeholder={t("k_234")}
+                      placeholder={t("question_input_placeholder")}
                       disabled={chatLoading}
                     />
                     <button className="solid-button icon-button" type="submit" disabled={chatLoading || !chatInput.trim()}>
                       <Send size={16} />
-                      {t("k_235")}
+                      {t("send_button")}
                     </button>
                   </form>
 
@@ -315,21 +575,12 @@ export function AiMentorPage() {
             {activeTab === "analysis" ? (
               mentorData ? (
                 <>
-                <Section
-                  title={t("k_117")}
-                  action={
-                    <button className="outline-button icon-button" type="button" onClick={() => setPlanCreated(true)}>
-                      <WandSparkles size={16} />
-                      {t("k_118")}
-                    </button>
-                  }
-                >
+                <Section title={t("short_final")}>
                   <p>{mentorData.summary}</p>
-                  {planCreated ? <p className="success-text">{t("k_163")}</p> : null}
                 </Section>
 
                 <div className="dual-grid">
-                  <Section title={t("k_119")}>
+                  <Section title={t("strong_areas")}>
                     <div className="chip-row">
                       {strengths.map((item) => (
                         <span key={item} className="chip good">
@@ -338,7 +589,7 @@ export function AiMentorPage() {
                       ))}
                     </div>
                   </Section>
-                  <Section title={t("k_120")}>
+                  <Section title={t("weak_areas")}>
                     <div className="chip-row">
                       {weaknesses.map((item) => (
                         <span key={item} className="chip warn">
@@ -349,7 +600,7 @@ export function AiMentorPage() {
                   </Section>
                 </div>
 
-                <Section title={t("k_121")}>
+                <Section title={t("recommendations")}>
                   <ul className="plain-list">
                     {mentorData.recommendations.map((item) => (
                       <li key={item}>{item}</li>
@@ -357,21 +608,35 @@ export function AiMentorPage() {
                   </ul>
                 </Section>
 
+                <div className="mentor-analysis-actions">
+                  <button
+                    className="outline-button"
+                    type="button"
+                    onClick={() => setShowAdvancedAnalysis((prev) => !prev)}
+                  >
+                    {showAdvancedAnalysis
+                      ? "\u0421\u043a\u0440\u044b\u0442\u044c \u043f\u043e\u0434\u0440\u043e\u0431\u043d\u044b\u0439 \u0430\u043d\u0430\u043b\u0438\u0437"
+                      : "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u043e\u0434\u0440\u043e\u0431\u043d\u044b\u0439 \u0430\u043d\u0430\u043b\u0438\u0437"}
+                  </button>
+                </div>
+
+                {showAdvancedAnalysis ? (
+                <>
                 {mentorData.explainability ? (
-                  <Section title={t("k_313")}>
+                  <Section title={t("why_ai_this_thinks")}>
                     <div className="stats-grid">
                       <article className="stat-card">
-                        <p>{t("k_314")}</p>
+                        <p>{t("confidence_model")}</p>
                         <strong>{mentorData.explainability.confidence}%</strong>
                       </article>
                       <article className="stat-card">
-                        <p>{t("k_316")}</p>
+                        <p>{t("source_2")}</p>
                         <strong>
                           {mentorData.explainability.source === "class-aggregates"
-                            ? t("k_335")
+                            ? t("aggregation_by_classes")
                             : mentorData.explainability.source === "school-aggregates"
-                              ? t("k_336")
-                              : t("k_334")}
+                              ? t("aggregation_by_school")
+                              : t("profile_student_2")}
                         </strong>
                       </article>
                     </div>
@@ -384,15 +649,36 @@ export function AiMentorPage() {
                 ) : null}
 
                 {mentorData.trends && mentorData.trends.length > 0 ? (
-                  <Section title={t("k_122")}>
+                  <Section title={t("trends_by_subjects")}>
+                    <div className="chip-row history-subject-picker" role="group" aria-label={t("subject")}>
+                      {trendOptions.map((item) => {
+                        const isActive = selectedTrendSubjects.includes(item.subject);
+                        const maxReached = selectedTrendSubjects.length >= 5;
+                        return (
+                          <button
+                            key={item.subject}
+                            className={isActive ? "chip-button active" : "chip-button"}
+                            type="button"
+                            onClick={() => toggleTrendSubject(item.subject)}
+                            disabled={!isActive && maxReached}
+                            title={item.subject}
+                          >
+                            {item.subject}
+                          </button>
+                        );
+                      })}
+
+                      <span className="chip">{selectedTrendSubjects.length}/5</span>
+                    </div>
+
                     <TrendBarChart
-                      data={mentorData.trends.map((item) => ({ label: item.subject, value: item.trend }))}
-                      valueLabel={t("k_123")}
+                      data={visibleTrends.map((item) => ({ label: item.subject, value: item.trend }))}
+                      valueLabel={t("change")}
                     />
                   </Section>
                 ) : null}
 
-                <Section title={t("k_194")}>
+                <Section title={t("predictive_analysis")}>
                   <DataState
                     loading={predictionsState.loading}
                     error={predictionsState.error}
@@ -405,7 +691,7 @@ export function AiMentorPage() {
                         <article className="mini-card">
                           <h4>{predictionsState.data.prediction.topRiskMessage}</h4>
                           <p>
-                            {t("k_195")}: {predictionsState.data.prediction.overallRisk}%
+                            {t("overall_risk")}: {predictionsState.data.prediction.overallRisk}%
                           </p>
                           <div className="chip-row">
                             {predictionsState.data.prediction.flags.map((item) => (
@@ -416,7 +702,7 @@ export function AiMentorPage() {
                           </div>
                         </article>
                         <article className="mini-card">
-                          <h4>{t("k_196")}</h4>
+                          <h4>{t("what_do_next")}</h4>
                           <ul className="plain-list">
                             {predictionsState.data.prediction.nextActions.map((item) => (
                               <li key={item}>{item}</li>
@@ -425,7 +711,7 @@ export function AiMentorPage() {
                         </article>
                       </div>
                     ) : (
-                      <p>{t("k_197")}</p>
+                      <p>{t("for_prediction_yet_not_enough_data")}</p>
                     )
                   ) : null}
 
@@ -433,10 +719,10 @@ export function AiMentorPage() {
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>{t("k_126")}</th>
-                          <th>{t("k_083")}</th>
-                          <th>{t("k_198")}</th>
-                          <th>{t("k_199")}</th>
+                          <th>{t("name")}</th>
+                          <th>{t("class")}</th>
+                          <th>{t("risk")}</th>
+                          <th>{t("probability")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -460,10 +746,10 @@ export function AiMentorPage() {
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>{t("k_083")}</th>
-                          <th>{t("k_200")}</th>
-                          <th>{t("k_139")}</th>
-                          <th>{t("k_186")}</th>
+                          <th>{t("class")}</th>
+                          <th>{t("average_risk")}</th>
+                          <th>{t("at_risk_students")}</th>
+                          <th>{t("students_2")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -482,11 +768,11 @@ export function AiMentorPage() {
 
                 {user?.role === "teacher" || user?.role === "admin" ? (
                   <Section
-                    title={t("k_201")}
+                    title={t("report_class_in_1_click")}
                     action={
                       <div className="action-row">
                         <select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)}>
-                          <option value="">{t("k_202")}</option>
+                          <option value="">{t("select_class")}</option>
                           {classOptions.map((item) => (
                             <option key={item} value={item}>
                               {item}
@@ -500,7 +786,7 @@ export function AiMentorPage() {
                           disabled={reportLoading || classOptions.length === 0}
                         >
                           <FileText size={16} />
-                          {reportLoading ? t("k_203") : t("k_204")}
+                          {reportLoading ? t("generating") : t("generate_report")}
                         </button>
                       </div>
                     }
@@ -510,20 +796,20 @@ export function AiMentorPage() {
                       <div className="list-grid">
                         <article className="mini-card">
                           <h4>
-                            {t("k_083")} {report.classId}
+                            {t("class")} {report.classId}
                           </h4>
                           <p>
-                            {t("k_186")}: {report.summary.students}
+                            {t("students_2")}: {report.summary.students}
                           </p>
                           <p>
-                            {t("k_071")}: {report.summary.averageScore.toFixed(2)}
+                            {t("average_score")}: {report.summary.averageScore.toFixed(2)}
                           </p>
                           <p>
-                            {t("k_139")}: {report.summary.highRiskStudents}
+                            {t("at_risk_students")}: {report.summary.highRiskStudents}
                           </p>
                         </article>
                         <article className="mini-card">
-                          <h4>{t("k_121")}</h4>
+                          <h4>{t("recommendations")}</h4>
                           <ul className="plain-list">
                             {report.recommendations.map((item) => (
                               <li key={item}>{item}</li>
@@ -535,17 +821,11 @@ export function AiMentorPage() {
                     {report ? <p className="report-text">{report.reportText}</p> : null}
                   </Section>
                 ) : null}
-
-                <Section title={t("k_122")}>
-                  <div className="mentor-brand-line">
-                    <BrainCircuit size={16} />
-                    <ShieldAlert size={16} />
-                    <span>{t("k_059")}</span>
-                  </div>
-                </Section>
+                </>
+                ) : null}
                 </>
               ) : (
-                <Section title={t("k_353")}>
+                <Section title={t("analysis_tab")}>
                   <DataState loading={mentorState.loading} error={mentorState.error} onRetry={mentorState.refresh} />
                 </Section>
               )

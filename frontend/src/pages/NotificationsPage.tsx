@@ -19,11 +19,11 @@ const iconByType = {
 };
 
 const notificationTypeLabelKey = (type: NotificationFilter): LocaleKey => {
-  if (type === "schedule") return "k_205";
-  if (type === "event") return "k_015";
-  if (type === "achievement") return "k_014";
-  if (type === "system") return "k_236";
-  return "k_109";
+  if (type === "schedule") return "schedule";
+  if (type === "event") return "events";
+  if (type === "achievement") return "achievements";
+  if (type === "system") return "system";
+  return "all";
 };
 
 export function NotificationsPage() {
@@ -86,28 +86,28 @@ export function NotificationsPage() {
         {data ? (
           <>
             <Section
-              title={t("k_329")}
+              title={t("instant_notifications")}
               action={
                 <div className="chip-row">
-                  <span className="chip good">{t("k_330")}</span>
-                  <span className="chip">{t("k_333")}</span>
+                  <span className="chip good">{t("live_2")}</span>
+                  <span className="chip">{t("auto_refresh_every_8_sec")}</span>
                 </div>
               }
             >
               <div className="stats-grid">
                 <article className="stat-card">
-                  <p>{t("k_331")}</p>
+                  <p>{t("last_sync")}</p>
                   <strong>{lastSyncAt ? formatDate(lastSyncAt.toISOString(), lang) : "—"}</strong>
                 </article>
                 <article className={`stat-card${newSinceSync > 0 ? " good" : ""}`}>
-                  <p>{t("k_332")}</p>
+                  <p>{t("new_with_previous_update")}</p>
                   <strong>{newSinceSync}</strong>
                 </article>
               </div>
             </Section>
 
             <Section
-              title={t("k_211")}
+              title={t("notifications")}
               action={
                 <div className="chip-group">
                   {(["all", "schedule", "event", "achievement", "system"] as NotificationFilter[]).map((type) => (
@@ -142,7 +142,7 @@ export function NotificationsPage() {
                   );
                 })}
               </div>
-              {items.length === 0 ? <p>{t("k_212")}</p> : null}
+              {items.length === 0 ? <p>{t("yet_none_notifications")}</p> : null}
             </Section>
           </>
         ) : null}

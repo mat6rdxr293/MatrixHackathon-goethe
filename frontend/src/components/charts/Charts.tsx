@@ -96,6 +96,8 @@ export function StudentHistoryChart({
   const labels = Array.from(
     new Set(progress.flatMap((item) => item.history.map((point) => point.date))),
   ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  const isSingleSeries = progress.length <= 1;
+  const showDots = labels.length <= 18;
 
   const chartData = labels.map((date) => {
     const row: Record<string, string | number | undefined> = { date: date.slice(5) };
@@ -110,7 +112,14 @@ export function StudentHistoryChart({
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={chartData} margin={chartMargin}>
           <CartesianGrid strokeDasharray="3 3" stroke="#dbe8ec" />
-          <XAxis dataKey="date" tick={chartAxisTick} tickMargin={10} height={44} />
+          <XAxis
+            dataKey="date"
+            tick={chartAxisTick}
+            tickMargin={10}
+            height={44}
+            interval="preserveStartEnd"
+            minTickGap={24}
+          />
           <YAxis domain={[2.9, 5.1]} tick={chartAxisTick} width={40} />
           <Tooltip
             contentStyle={{ borderRadius: 12, border: "1px solid #cfe0e5" }}
@@ -119,7 +128,7 @@ export function StudentHistoryChart({
               return [numericValue.toFixed(1), scoreLabel];
             }}
           />
-          <Legend />
+          {!isSingleSeries ? <Legend /> : null}
           {progress.map((item, index) => (
             <Line
               key={item.subject}
@@ -127,7 +136,8 @@ export function StudentHistoryChart({
               dataKey={item.subject}
               stroke={seriesColors[index % seriesColors.length]}
               strokeWidth={2}
-              dot={{ r: 3 }}
+              connectNulls
+              dot={showDots ? { r: 3 } : false}
               activeDot={{ r: 5 }}
             />
           ))}
